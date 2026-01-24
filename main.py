@@ -33,9 +33,11 @@ def download_data(args):
 def train_model(args):
     """Train a model."""
     import torch
+    from pathlib import Path
     from src.data import (
-        AmpliconRepositoryLoader, CytoCellDBLoader, DepMapLoader,
-        ECDNADataset, VulnerabilityDataset, create_dataloader
+        AmpliconRepositoryLoader, CytoCellDBLoader, DepMapLoader, HiCLoader,
+        ECDNADataset, DynamicsDataset, VulnerabilityDataset, create_dataloader,
+        SplitGenerator
     )
     from src.models import ECDNAFormer, CircularODE, VulnCausal, ECLIPSE
     from src.training import (
@@ -44,27 +46,144 @@ def train_model(args):
 
     device = "cuda" if torch.cuda.is_available() and not args.cpu else "cpu"
     logger.info(f"Training on device: {device}")
+    logger.info(f"Data directory: {args.data_dir}")
+    logger.info(f"Checkpoint directory: {args.checkpoint_dir}")
+
+    data_dir = Path(args.data_dir)
 
     if args.module == "former":
         logger.info("Training ecDNA-Former (Module 1)...")
+        logger.info("Loading ecDNA labels and features...")
+
+        # Load ecDNA dataset
+        dataset = ECDNADataset.from_data_dir(
+            data_dir=data_dir,
+            split="train",
+        )
+        logger.info(f"Training samples: {len(dataset)}")
+
+        # Create validation set
+        val_dataset = ECDNADataset.from_data_dir(
+            data_dir=data_dir,
+            split="val",
+        )
+        logger.info(f"Validation samples: {len(val_dataset)}")
+
+        # Create dataloaders
+        train_loader = create_dataloader(
+            dataset, batch_size=args.batch_size, shuffle=True
+        )
+        val_loader = create_dataloader(
+            val_dataset, batch_size=args.batch_size, shuffle=False
+        )
+
+        # Create model
         model = ECDNAFormer()
-        # Load data and create trainer
-        # (Placeholder - requires actual data)
+        logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+        # Create trainer
+        trainer = ECDNAFormerTrainer(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            device=device,
+            checkpoint_dir=args.checkpoint_dir,
+            use_wandb=args.wandb,
+        )
+
+        # Train
+        history = trainer.train(num_epochs=args.epochs)
         logger.info("ecDNA-Former training complete")
+        logger.info(f"Best validation loss: {trainer.best_val_loss:.4f}")
 
     elif args.module == "dynamics":
         logger.info("Training CircularODE (Module 2)...")
+
+        # Load trajectory dataset
+        dataset = DynamicsDataset.from_data_dir(
+            data_dir=data_dir / "ecdna_trajectories",
+            split="train",
+        )
+        logger.info(f"Training trajectories: {len(dataset)}")
+
+        val_dataset = DynamicsDataset.from_data_dir(
+            data_dir=data_dir / "ecdna_trajectories",
+            split="val",
+        )
+
+        train_loader = create_dataloader(
+            dataset, batch_size=args.batch_size, shuffle=True
+        )
+        val_loader = create_dataloader(
+            val_dataset, batch_size=args.batch_size, shuffle=False
+        )
+
         model = CircularODE()
+        logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+        trainer = CircularODETrainer(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            device=device,
+            checkpoint_dir=args.checkpoint_dir,
+            use_wandb=args.wandb,
+        )
+
+        history = trainer.train(num_epochs=args.epochs)
         logger.info("CircularODE training complete")
 
     elif args.module == "vuln":
         logger.info("Training VulnCausal (Module 3)...")
-        model = VulnCausal()
+
+        # Load vulnerability dataset
+        dataset = VulnerabilityDataset.from_data_dir(
+            data_dir=data_dir,
+            split="train",
+        )
+        logger.info(f"Training cell lines: {len(dataset)}")
+
+        val_dataset = VulnerabilityDataset.from_data_dir(
+            data_dir=data_dir,
+            split="val",
+        )
+
+        train_loader = create_dataloader(
+            dataset, batch_size=args.batch_size, shuffle=True
+        )
+        val_loader = create_dataloader(
+            val_dataset, batch_size=args.batch_size, shuffle=False
+        )
+
+        # Get data dimensions from dataset
+        num_genes = dataset.crispr.shape[1]
+        expression_dim = dataset.expression.shape[1]
+        logger.info(f"Data dimensions: {num_genes} genes, {expression_dim} expression features")
+
+        model = VulnCausal(
+            num_genes=num_genes,
+            expression_dim=expression_dim,
+        )
+        logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+
+        trainer = VulnCausalTrainer(
+            model=model,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            device=device,
+            checkpoint_dir=args.checkpoint_dir,
+            use_wandb=args.wandb,
+        )
+
+        history = trainer.train(num_epochs=args.epochs)
         logger.info("VulnCausal training complete")
 
     elif args.module == "eclipse":
         logger.info("Training full ECLIPSE...")
         model = ECLIPSE()
+        logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+        # Full ECLIPSE training requires all data sources
+        logger.warning("Full ECLIPSE training not yet implemented - train modules separately first")
         logger.info("ECLIPSE training complete")
 
 

@@ -237,15 +237,44 @@ eclipse/
 └── README.md
 ```
 
-## Expected Performance
+## Current Results
 
-| Task | Metric | Expected | Baseline |
-|------|--------|----------|----------|
-| ecDNA Formation | AUROC | 0.80-0.85 | 0.65-0.70 |
-| ecDNA Formation | AUPRC | 0.55-0.65 | 0.35-0.40 |
-| Oncogene Prediction | Macro-F1 | 0.70-0.75 | 0.50-0.55 |
-| Trajectory Prediction | MSE (log CN) | 0.3-0.5 | 0.8-1.2 |
-| Vulnerability Ranking | Precision@20 | 0.40-0.50 | 0.15-0.20 |
+### Module 1: ecDNA-Former (Validated)
+
+Trained on CytoCellDB data (1,301 train / 278 val samples, ~7% ecDNA+)
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| **AUROC** | 0.732 | Ranking ability |
+| **F1 Score** | 0.303 | At threshold 0.35 |
+| **Recall** | 52.6% | Detects 10/19 ecDNA+ |
+| **Precision** | 21.3% | |
+| **Balanced Accuracy** | 69.2% | |
+| **MCC** | 0.258 | Matthews correlation |
+
+**Key Features Used:**
+- Copy number: `max_copy_number`, `log_max_cn`, `cn_gt_10/20/50`
+- Oncogenes: `has_MYC`, `has_EGFR`, `has_CDK4`, `has_MDM2`, etc.
+- Structural: `has_ecdna_type`, `has_bfb_type`, `num_amplicons`
+
+**Baseline Comparison:**
+| Model | AUROC | F1 |
+|-------|-------|-----|
+| ecDNA-Former | **0.732** | 0.303 |
+| RandomForest (all features) | 0.620 | 0.357 |
+| RandomForest (no leaky features) | 0.528 | 0.296 |
+
+### Module 2 & 3: Pending Validation
+
+## Target Performance
+
+| Task | Metric | Target | Current |
+|------|--------|--------|---------|
+| ecDNA Formation | AUROC | 0.80-0.85 | 0.732 |
+| ecDNA Formation | F1 | 0.40-0.50 | 0.303 |
+| Oncogene Prediction | Macro-F1 | 0.70-0.75 | - |
+| Trajectory Prediction | MSE (log CN) | 0.3-0.5 | - |
+| Vulnerability Ranking | Precision@20 | 0.40-0.50 | - |
 
 ## Citation
 

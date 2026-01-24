@@ -10,6 +10,22 @@
 | DepMap Cell Lines | 457 KB | ✓ Ready |
 | COSMIC Genes | 394 B | ✓ Ready (curated list) |
 | Fragile Sites (hg38) | 2.5 KB | ✓ Ready (55 CFS) |
+| **CytoCellDB** | 1.2 MB | ✓ Ready (1,859 cell lines) |
+
+## Feature Extraction Status
+
+Features extracted and saved to `data/features/`:
+
+| Split | Samples | ecDNA+ | ecDNA- | File |
+|-------|---------|--------|--------|------|
+| Train | 1,301 | 103 (7.9%) | 1,198 | `module1_features_train.npz` |
+| Val | 278 | 19 (6.8%) | 259 | `module1_features_val.npz` |
+| Test | 280 | 19 (6.8%) | 261 | `module1_features_test.npz` |
+
+**Features included (27 total):**
+- Copy number (7): `max_copy_number`, `mean_copy_number`, `log_max_cn`, `cn_gt_10`, `cn_gt_20`, `cn_gt_50`, `num_amplicons`
+- Oncogenes (14): `has_MYC`, `has_MYCL`, `has_MYCN`, `has_EGFR`, `has_ERBB2`, `has_CDK4`, `has_CDK6`, `has_MDM2`, `has_CCND1`, `has_CCNE1`, `has_FGFR1`, `has_MET`, `has_PDGFRA`, `num_oncogenes`, `total_genes_on_ecdna`
+- Structural (5): `has_ecdna_type`, `has_bfb_type`, `has_linear_type`, `has_complex_type`, `has_hsr`
 
 ## Manual Download Required
 

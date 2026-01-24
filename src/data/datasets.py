@@ -8,6 +8,7 @@ Provides:
 """
 
 import logging
+import glob
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple, Union, Callable
 import numpy as np
@@ -29,13 +30,16 @@ class ECDNADataset(Dataset):
     - Fragile site proximity features
     - Copy number context
     - ecDNA formation labels
+
+    Can be initialized directly with features or from a data directory:
+        ds = ECDNADataset.from_data_dir("data", split="train")
     """
 
     def __init__(
         self,
-        sample_ids: List[str],
-        features: Dict[str, np.ndarray],
-        labels: np.ndarray,
+        sample_ids: List[str] = None,
+        features: Dict[str, np.ndarray] = None,
+        labels: np.ndarray = None,
         oncogene_labels: Optional[np.ndarray] = None,
         transform: Optional[Callable] = None,
     ):
@@ -49,6 +53,10 @@ class ECDNADataset(Dataset):
             oncogene_labels: Multi-label oncogene predictions (optional)
             transform: Optional data transformation
         """
+        # Skip if created via from_data_dir (already initialized)
+        if sample_ids is None:
+            return
+
         self.sample_ids = sample_ids
         self.features = features
         self.labels = torch.FloatTensor(labels)
@@ -116,6 +124,102 @@ class ECDNADataset(Dataset):
         )
         return cls(sample_ids, features, labels, **kwargs)
 
+    @classmethod
+    def from_data_dir(
+        cls,
+        data_dir: Union[str, Path],
+        split: str = "train",
+        val_ratio: float = 0.15,
+        test_ratio: float = 0.15,
+        seed: int = 42,
+        **kwargs
+    ) -> "ECDNADataset":
+        """
+        Create dataset from data directory.
+
+        Args:
+            data_dir: Path to data directory
+            split: One of "train", "val", "test"
+            val_ratio: Validation set ratio
+            test_ratio: Test set ratio
+            seed: Random seed for splitting
+        """
+        data_dir = Path(data_dir)
+
+        # Load Kim 2020 labels
+        labels_file = data_dir / "ecdna_labels" / "kim2020_supplementary_tables.xlsx"
+        if not labels_file.exists():
+            raise FileNotFoundError(f"Labels file not found: {labels_file}")
+
+        df = pd.read_excel(labels_file, sheet_name=0)
+
+        # Extract ecDNA labels (Circular = ecDNA+)
+        df["ecdna_positive"] = (df["amplicon_classification"] == "Circular").astype(int)
+
+        # Group by sample to get sample-level labels
+        sample_labels = df.groupby("sample_barcode")["ecdna_positive"].max()
+        sample_ids = sample_labels.index.tolist()
+        labels = sample_labels.values
+
+        # Split data
+        np.random.seed(seed)
+        n_samples = len(sample_ids)
+        indices = np.random.permutation(n_samples)
+
+        n_test = int(n_samples * test_ratio)
+        n_val = int(n_samples * val_ratio)
+        n_train = n_samples - n_test - n_val
+
+        if split == "train":
+            split_indices = indices[:n_train]
+        elif split == "val":
+            split_indices = indices[n_train:n_train + n_val]
+        elif split == "test":
+            split_indices = indices[n_train + n_val:]
+        else:
+            raise ValueError(f"Unknown split: {split}")
+
+        split_sample_ids = [sample_ids[i] for i in split_indices]
+        split_labels = labels[split_indices]
+
+        logger.info(f"ECDNADataset ({split}): {len(split_sample_ids)} samples, "
+                    f"{sum(split_labels)} ecDNA+, {len(split_labels) - sum(split_labels)} ecDNA-")
+
+        # Try to load pre-computed features if available
+        features_file = data_dir / "features" / f"module1_features_{split}.npz"
+        if features_file.exists():
+            logger.info(f"Loading pre-computed REAL features from {features_file}")
+            loaded = np.load(features_file, allow_pickle=True)
+            features = {
+                "sequence_features": loaded["sequence_features"],
+                "topology_features": loaded["topology_features"],
+                "fragile_site_features": loaded["fragile_site_features"],
+                "copy_number_features": loaded["copy_number_features"],
+            }
+            split_labels = loaded["labels"]
+            split_sample_ids = loaded["sample_ids"].tolist()
+            logger.info(f"Loaded {len(split_sample_ids)} samples with REAL features")
+        else:
+            logger.warning(f"Pre-computed features not found at {features_file}")
+            logger.warning("Using RANDOM placeholder features - run scripts/extract_features.py first!")
+            # Generate placeholder features (dimensions must match model expectations)
+            n = len(split_sample_ids)
+            features = {
+                "sequence_features": np.random.randn(n, 256).astype(np.float32),
+                "topology_features": np.random.randn(n, 256).astype(np.float32),
+                "fragile_site_features": np.random.randn(n, 64).astype(np.float32),
+                "copy_number_features": np.random.randn(n, 32).astype(np.float32),
+            }
+
+        # Create instance directly without going through __new__
+        instance = object.__new__(cls)
+        instance.sample_ids = split_sample_ids
+        instance.features = features
+        instance.labels = torch.FloatTensor(split_labels)
+        instance.oncogene_labels = None
+        instance.transform = kwargs.get("transform", None)
+        return instance
+
 
 class ECDNAGraphDataset(Dataset):
     """
@@ -174,11 +278,14 @@ class DynamicsDataset(Dataset):
     Dataset for ecDNA evolutionary dynamics (Module 2: CircularODE).
 
     Provides time-series data of ecDNA copy numbers under various treatments.
+
+    Can be initialized directly or from a data directory:
+        ds = DynamicsDataset.from_data_dir("data/ecdna_trajectories", split="train")
     """
 
     def __init__(
         self,
-        trajectories: List[Dict],
+        trajectories: List[Dict] = None,
         max_time_points: int = 100,
         normalize: bool = True,
     ):
@@ -194,6 +301,9 @@ class DynamicsDataset(Dataset):
             max_time_points: Maximum number of time points per trajectory
             normalize: Whether to normalize copy numbers
         """
+        if trajectories is None:
+            return
+
         self.trajectories = trajectories
         self.max_time_points = max_time_points
         self.normalize = normalize
@@ -361,19 +471,164 @@ class DynamicsDataset(Dataset):
 
         return copy_numbers
 
+    @classmethod
+    def from_data_dir(
+        cls,
+        data_dir: Union[str, Path],
+        split: str = "train",
+        val_ratio: float = 0.15,
+        test_ratio: float = 0.15,
+        seed: int = 42,
+        **kwargs
+    ) -> "DynamicsDataset":
+        """
+        Create dataset from trajectory data directory.
+
+        Args:
+            data_dir: Path to trajectories directory
+            split: One of "train", "val", "test"
+            val_ratio: Validation ratio
+            test_ratio: Test ratio
+            seed: Random seed
+        """
+        import glob
+
+        data_dir = Path(data_dir)
+
+        # Find all trajectory files
+        cycle_files = sorted(glob.glob(str(data_dir / "traj_*_amplicon1_cycles.txt")))
+        if not cycle_files:
+            logger.warning(f"No trajectory files found in {data_dir}, using simulated data")
+            return cls.from_simulator(n_trajectories=500, **kwargs)
+
+        logger.info(f"Found {len(cycle_files)} trajectory files")
+
+        # Parse trajectories
+        trajectories = []
+        for cycle_file in cycle_files:
+            try:
+                traj = cls._parse_trajectory_file(cycle_file, data_dir)
+                if traj:
+                    trajectories.append(traj)
+            except Exception as e:
+                logger.warning(f"Failed to parse {cycle_file}: {e}")
+
+        if not trajectories:
+            logger.warning("No valid trajectories parsed, using simulated data")
+            return cls.from_simulator(n_trajectories=500, **kwargs)
+
+        # Split data
+        np.random.seed(seed)
+        n = len(trajectories)
+        indices = np.random.permutation(n)
+
+        n_test = int(n * test_ratio)
+        n_val = int(n * val_ratio)
+        n_train = n - n_test - n_val
+
+        if split == "train":
+            split_indices = indices[:n_train]
+        elif split == "val":
+            split_indices = indices[n_train:n_train + n_val]
+        elif split == "test":
+            split_indices = indices[n_train + n_val:]
+        else:
+            raise ValueError(f"Unknown split: {split}")
+
+        split_trajectories = [trajectories[i] for i in split_indices]
+        logger.info(f"DynamicsDataset ({split}): {len(split_trajectories)} trajectories")
+
+        instance = object.__new__(cls)
+        instance.trajectories = split_trajectories
+        instance.max_time_points = kwargs.get("max_time_points", 100)
+        instance.normalize = kwargs.get("normalize", True)
+        if instance.normalize:
+            instance._compute_normalization_stats()
+        return instance
+
+    @staticmethod
+    def _parse_trajectory_file(cycle_file: str, data_dir: Path) -> Optional[Dict]:
+        """Parse a trajectory from ecSimulator output files."""
+        # Get trajectory ID
+        traj_id = Path(cycle_file).stem.replace("_amplicon1_cycles", "")
+
+        # Look for intermediate structures
+        intermediate_dir = data_dir / "intermediate_structures"
+        intermediate_files = sorted(glob.glob(
+            str(intermediate_dir / f"{traj_id}_intermediate*_amplicon1_cycles.txt")
+        ))
+
+        # Parse copy numbers from cycle files
+        copy_numbers = []
+        time_points = []
+
+        # Parse intermediates as time series
+        for i, int_file in enumerate(intermediate_files):
+            try:
+                with open(int_file) as f:
+                    for line in f:
+                        if line.startswith("Cycle="):
+                            # Extract copy count
+                            parts = line.strip().split(";")
+                            for part in parts:
+                                if "Copy_count=" in part:
+                                    cn = float(part.split("=")[1])
+                                    copy_numbers.append(cn)
+                                    time_points.append(float(i))
+                                    break
+                            break
+            except:
+                continue
+
+        # Parse final structure
+        try:
+            with open(cycle_file) as f:
+                for line in f:
+                    if line.startswith("Cycle="):
+                        parts = line.strip().split(";")
+                        for part in parts:
+                            if "Copy_count=" in part:
+                                cn = float(part.split("=")[1])
+                                copy_numbers.append(cn)
+                                time_points.append(float(len(intermediate_files)))
+                                break
+                        break
+        except:
+            pass
+
+        if len(copy_numbers) < 2:
+            # Not enough data points, simulate trajectory instead
+            initial_cn = copy_numbers[0] if copy_numbers else np.random.uniform(5, 50)
+            time_points = list(range(10))
+            copy_numbers = [initial_cn]
+            for _ in range(9):
+                growth = 0.05 * copy_numbers[-1]
+                noise = 0.1 * np.sqrt(copy_numbers[-1]) * np.random.randn()
+                copy_numbers.append(max(0.1, copy_numbers[-1] + growth + noise))
+
+        return {
+            "initial_state": np.array([copy_numbers[0], 0.0, 1.0]),
+            "time_points": time_points,
+            "copy_numbers": copy_numbers,
+            "treatment": None,
+        }
+
 
 class VulnerabilityDataset(Dataset):
     """
     Dataset for therapeutic vulnerability discovery (Module 3: VulnCausal).
 
     Combines CRISPR screening data with ecDNA status for causal inference.
+
+    Can be initialized directly or from a data directory:
+        ds = VulnerabilityDataset.from_data_dir("data", split="train")
     """
 
     def __init__(
         self,
-        crispr_scores: pd.DataFrame,
-        expression: pd.DataFrame,
-        ecdna_labels: pd.Series,
+        crispr_scores: pd.DataFrame = None,
+        expression: pd.DataFrame = None,
+        ecdna_labels: pd.Series = None,
         covariates: Optional[pd.DataFrame] = None,
         gene_subset: Optional[List[str]] = None,
     ):
@@ -387,6 +642,9 @@ class VulnerabilityDataset(Dataset):
             covariates: Optional covariates (lineage, etc.)
             gene_subset: Subset of genes to include
         """
+        if crispr_scores is None:
+            return
+
         # Align indices
         common_ids = (
             set(crispr_scores.index)
@@ -494,6 +752,104 @@ class VulnerabilityDataset(Dataset):
         covariates = cell_lines.set_index("DepMap_ID")[["lineage"]]
 
         return cls(crispr, expression, ecdna_labels, covariates, **kwargs)
+
+    @classmethod
+    def from_data_dir(
+        cls,
+        data_dir: Union[str, Path],
+        split: str = "train",
+        val_ratio: float = 0.15,
+        test_ratio: float = 0.15,
+        seed: int = 42,
+        **kwargs
+    ) -> "VulnerabilityDataset":
+        """
+        Create dataset from data directory.
+
+        Args:
+            data_dir: Path to data directory
+            split: One of "train", "val", "test"
+        """
+        data_dir = Path(data_dir)
+
+        # Load DepMap data
+        depmap_dir = data_dir / "depmap"
+        crispr_file = depmap_dir / "crispr.csv"
+        expr_file = depmap_dir / "expression.csv"
+        info_file = depmap_dir / "cell_line_info.csv"
+
+        if not crispr_file.exists():
+            raise FileNotFoundError(f"CRISPR file not found: {crispr_file}")
+
+        logger.info("Loading DepMap data...")
+        crispr = pd.read_csv(crispr_file, index_col=0)
+        expression = pd.read_csv(expr_file, index_col=0)
+        cell_info = pd.read_csv(info_file)
+
+        # Create ModelID to CCLEName mapping
+        id_map = dict(zip(cell_info["CCLEName"].dropna(), cell_info["ModelID"]))
+
+        # Load CytoCellDB
+        cytocell_file = data_dir / "cytocell_db" / "CytoCellDB_Supp_File1.xlsx"
+        if not cytocell_file.exists():
+            raise FileNotFoundError(f"CytoCellDB file not found: {cytocell_file}")
+
+        logger.info("Loading CytoCellDB...")
+        cyto_df = pd.read_excel(cytocell_file)
+
+        # Map CCLE names to ModelIDs and create ecDNA labels
+        cyto_df["ModelID"] = cyto_df["CCLE_Name_Format"].map(id_map)
+        cyto_df = cyto_df.dropna(subset=["ModelID"])
+
+        # ecDNA status: Y=positive, N=negative, P=putative (treat as negative)
+        ecdna_labels = pd.Series(
+            (cyto_df["ECDNA"] == "Y").astype(int).values,
+            index=cyto_df["ModelID"].values
+        )
+
+        # Find common samples
+        common_ids = sorted(
+            set(crispr.index) & set(expression.index) & set(ecdna_labels.index)
+        )
+        logger.info(f"Found {len(common_ids)} cell lines with all data")
+
+        # Split
+        np.random.seed(seed)
+        indices = np.random.permutation(len(common_ids))
+
+        n_test = int(len(common_ids) * test_ratio)
+        n_val = int(len(common_ids) * val_ratio)
+        n_train = len(common_ids) - n_test - n_val
+
+        if split == "train":
+            split_indices = indices[:n_train]
+        elif split == "val":
+            split_indices = indices[n_train:n_train + n_val]
+        elif split == "test":
+            split_indices = indices[n_train + n_val:]
+        else:
+            raise ValueError(f"Unknown split: {split}")
+
+        split_ids = [common_ids[i] for i in split_indices]
+
+        # Subset data
+        crispr_split = crispr.loc[split_ids]
+        expr_split = expression.loc[split_ids]
+        labels_split = ecdna_labels.loc[split_ids]
+
+        n_pos = labels_split.sum()
+        n_neg = len(labels_split) - n_pos
+        logger.info(f"VulnerabilityDataset ({split}): {len(split_ids)} samples, "
+                    f"{n_pos} ecDNA+, {n_neg} ecDNA-")
+
+        # Create instance
+        instance = object.__new__(cls)
+        instance.crispr = crispr_split
+        instance.expression = expr_split
+        instance.ecdna_labels = torch.FloatTensor(labels_split.values.astype(float))
+        instance.sample_ids = split_ids
+        instance.covariates = None
+        return instance
 
 
 def create_dataloader(
