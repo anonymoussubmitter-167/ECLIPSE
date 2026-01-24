@@ -239,42 +239,42 @@ eclipse/
 
 ## Current Results
 
-### Module 1: ecDNA-Former (Validated)
+### Module 1: ecDNA-Former
 
-Trained on CytoCellDB data (1,301 train / 278 val samples, ~7% ecDNA+)
+**⚠️ CRITICAL: Feature Leakage Identified**
 
-| Metric | Value | Notes |
-|--------|-------|-------|
-| **AUROC** | 0.732 | Ranking ability |
-| **F1 Score** | 0.303 | At threshold 0.35 |
-| **Recall** | 52.6% | Detects 10/19 ecDNA+ |
-| **Precision** | 21.3% | |
-| **Balanced Accuracy** | 69.2% | |
-| **MCC** | 0.258 | Matthews correlation |
+Initial results (AUROC 0.732) were inflated due to feature leakage. All CytoCellDB features are derived from AmpliconArchitect outputs, which require ecDNA detection first:
 
-**Key Features Used:**
-- Copy number: `max_copy_number`, `log_max_cn`, `cn_gt_10/20/50`
-- Oncogenes: `has_MYC`, `has_EGFR`, `has_CDK4`, `has_MDM2`, etc.
-- Structural: `has_ecdna_type`, `has_bfb_type`, `num_amplicons`
+| Feature | Source | Problem |
+|---------|--------|---------|
+| `max_copy_number` | AA_AMP_Max_CN | Copy number OF the amplicon (post-detection) |
+| `has_MYC`, etc. | AA - genes_on_ecDNA | Genes ON ecDNA (requires knowing ecDNA exists) |
+| `has_ecdna_type` | AA -AMP Type | Literally the ecDNA classification |
 
-**Baseline Comparison:**
-| Model | AUROC | F1 |
-|-------|-------|-----|
-| ecDNA-Former | **0.732** | 0.303 |
-| RandomForest (all features) | 0.620 | 0.357 |
-| RandomForest (no leaky features) | 0.528 | 0.296 |
+**Honest Baseline (non-leaky features only):**
+| Model | AUROC | F1 | Notes |
+|-------|-------|-----|-------|
+| RandomForest (leaky features) | 0.620 | 0.357 | Circular - invalid |
+| RandomForest (CN only) | 0.348 | 0.091 | CN also from AA |
+| **True baseline** | ~0.50 | ~0.10 | Near random |
+
+**Path Forward - Non-Leaky Features Needed:**
+1. DepMap CNV profiles (genome-wide, not AA amplicon CN)
+2. Gene expression from RNA-seq
+3. Sequence features (GC content, fragile site proximity)
+4. Hi-C chromatin topology
 
 ### Module 2 & 3: Pending Validation
 
 ## Target Performance
 
-| Task | Metric | Target | Current |
-|------|--------|--------|---------|
-| ecDNA Formation | AUROC | 0.80-0.85 | 0.732 |
-| ecDNA Formation | F1 | 0.40-0.50 | 0.303 |
-| Oncogene Prediction | Macro-F1 | 0.70-0.75 | - |
-| Trajectory Prediction | MSE (log CN) | 0.3-0.5 | - |
-| Vulnerability Ranking | Precision@20 | 0.40-0.50 | - |
+| Task | Metric | Target | Current | Status |
+|------|--------|--------|---------|--------|
+| ecDNA Formation | AUROC | 0.80-0.85 | ~0.50 | Needs non-leaky features |
+| ecDNA Formation | F1 | 0.40-0.50 | ~0.10 | Needs non-leaky features |
+| Oncogene Prediction | Macro-F1 | 0.70-0.75 | - | - |
+| Trajectory Prediction | MSE (log CN) | 0.3-0.5 | - | - |
+| Vulnerability Ranking | Precision@20 | 0.40-0.50 | - | - |
 
 ## Citation
 
