@@ -92,7 +92,7 @@ def train_model(args):
         )
 
         # Train
-        history = trainer.train(num_epochs=args.epochs)
+        history = trainer.train(num_epochs=args.epochs, early_stopping_patience=args.patience)
         logger.info("ecDNA-Former training complete")
         logger.info(f"Best validation loss: {trainer.best_val_loss:.4f}")
 
@@ -257,6 +257,8 @@ Examples:
                               help="Number of epochs")
     train_parser.add_argument("--batch-size", type=int, default=32,
                               help="Batch size")
+    train_parser.add_argument("--patience", type=int, default=5,
+                              help="Early stopping patience")
     train_parser.add_argument("--lr", type=float, default=1e-4,
                               help="Learning rate")
     train_parser.add_argument("--cpu", action="store_true",
