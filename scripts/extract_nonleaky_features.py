@@ -5,7 +5,8 @@ Extract NON-LEAKY features for ecDNA prediction.
 Uses upstream data that is available BEFORE ecDNA detection:
 1. DepMap gene-level CNV (genome-wide, not AA amplicon CN)
 2. DepMap gene expression (RNA-seq)
-3. Fragile site proximity (from reference genome)
+3. Hi-C topology features (reference-based chromatin context)
+4. Fragile site proximity (from reference genome)
 
 Does NOT use:
 - AmpliconArchitect outputs (AA_AMP_Max_CN, genes_on_ecDNA, AMP_Type)
@@ -37,6 +38,94 @@ FRAGILE_SITES = [
     ('chr7', 110000000, 116000000, 'FRA7H'),
     ('chrX', 6500000, 8000000, 'FRAXB'),
 ]
+
+
+def load_hic_features(data_dir: Path):
+    """Load precomputed Hi-C topology features from reference genome."""
+    hic_file = data_dir / "features" / "hic_features.npz"
+
+    if not hic_file.exists():
+        logger.warning(f"Hi-C features not found at {hic_file}. Run extract_hic_features.py first.")
+        return None
+
+    logger.info(f"Loading Hi-C features from {hic_file}...")
+    hic_data = np.load(hic_file)
+
+    # Convert to dict
+    hic_features = {key: float(hic_data[key]) for key in hic_data.files}
+    logger.info(f"  Loaded {len(hic_features)} Hi-C features")
+
+    return hic_features
+
+
+def add_hic_features(features_df: pd.DataFrame, hic_features: dict) -> pd.DataFrame:
+    """Add Hi-C interaction features to feature DataFrame.
+
+    Hi-C features are reference-based (from GM12878) and describe the
+    chromatin topology context at oncogene loci. We create interaction
+    features with sample-specific CNV to capture whether amplification
+    occurs in regions with favorable chromatin topology for ecDNA formation.
+    """
+    if hic_features is None:
+        logger.warning("No Hi-C features available, skipping...")
+        return features_df
+
+    logger.info("Adding Hi-C topology interaction features...")
+
+    n_features_added = 0
+
+    # 1. CNV × Hi-C density interactions
+    # High value = amplified gene in accessible chromatin region
+    for gene in ECDNA_ONCOGENES:
+        cnv_col = f'cnv_{gene}'
+        hic_density_key = f'hic_density_{gene}'
+
+        if cnv_col in features_df.columns and hic_density_key in hic_features:
+            hic_val = hic_features[hic_density_key]
+            features_df[f'cnv_hic_{gene}'] = features_df[cnv_col] * hic_val
+            n_features_added += 1
+
+    # 2. CNV × Hi-C long-range interactions
+    # High value = amplified gene with high long-range chromatin contacts
+    for gene in ECDNA_ONCOGENES:
+        cnv_col = f'cnv_{gene}'
+        hic_lr_key = f'hic_longrange_{gene}'
+
+        if cnv_col in features_df.columns and hic_lr_key in hic_features:
+            hic_val = hic_features[hic_lr_key]
+            features_df[f'cnv_hiclr_{gene}'] = features_df[cnv_col] * hic_val
+            n_features_added += 1
+
+    # 3. Summary statistics using Hi-C weights
+    # Weight oncogene CNV by their Hi-C accessibility
+    hic_density_mean = hic_features.get('hic_density_mean', 1.0)
+    hic_longrange_mean = hic_features.get('hic_longrange_mean', 0.5)
+
+    # Weighted oncogene CNV max by Hi-C relative density
+    weighted_cnv = []
+    for gene in ECDNA_ONCOGENES:
+        cnv_col = f'cnv_{gene}'
+        rel_key = f'hic_density_rel_{gene}'
+        if cnv_col in features_df.columns and rel_key in hic_features:
+            weight = hic_features[rel_key]
+            weighted_cnv.append(features_df[cnv_col] * weight)
+
+    if weighted_cnv:
+        weighted_df = pd.concat(weighted_cnv, axis=1)
+        features_df['oncogene_cnv_hic_weighted_max'] = weighted_df.max(axis=1)
+        features_df['oncogene_cnv_hic_weighted_mean'] = weighted_df.mean(axis=1)
+        n_features_added += 2
+
+    # 4. Hi-C summary features (as reference context)
+    # These are the same for all samples but provide model with topology info
+    features_df['hic_density_mean'] = hic_features.get('hic_density_mean', 0)
+    features_df['hic_density_max'] = hic_features.get('hic_density_max', 0)
+    features_df['hic_longrange_mean'] = hic_features.get('hic_longrange_mean', 0)
+    n_features_added += 3
+
+    logger.info(f"  Added {n_features_added} Hi-C interaction features")
+
+    return features_df
 
 
 def load_depmap_data(data_dir: Path):
@@ -200,6 +289,9 @@ def main():
     cell_info, cnv, expr = load_depmap_data(data_dir)
     labels = load_ecdna_labels(data_dir)
 
+    # Load Hi-C features (reference-based)
+    hic_features = load_hic_features(data_dir)
+
     # Find common samples
     common_samples = list(
         set(labels.index) &
@@ -216,6 +308,9 @@ def main():
     # Combine features
     all_features = pd.concat([cnv_features, expr_features, dosage_features], axis=1)
     all_features = all_features.loc[common_samples]
+
+    # Add Hi-C topology features (reference-based, same for all samples)
+    all_features = add_hic_features(all_features, hic_features)
 
     # Add labels
     all_features['ecdna_positive'] = labels.loc[common_samples, 'ecdna_positive']
