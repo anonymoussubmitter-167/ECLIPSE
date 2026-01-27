@@ -552,24 +552,35 @@ Validated against published CN trajectories from [Lange et al. Nature Genetics 2
 - All predictions within published error bars (3/3 experiments)
 - Mean correlation: **0.998**
 
-#### Module 3: VulnCausal vs GDSC Drug Sensitivity
+#### Module 3: VulnCausal vs GDSC2 Drug Sensitivity (Real Data)
 
-Tested whether ecDNA+ cell lines are more sensitive to drugs targeting our vulnerability hits.
+Cross-referenced 944 cell lines (107 ecDNA+, 837 ecDNA-) between CytoCellDB and GDSC2 (242K dose-response measurements, 286 drugs). Tested whether ecDNA+ lines show selective sensitivity to drugs targeting our vulnerability hits.
 
-| Drug | Target | Selectivity (ecDNA-/ecDNA+) | P-value | Sig |
-|------|--------|----------------------------|---------|-----|
-| AZD7762 | CHK1/CHK2 | **1.93x** | 0.006 | ** |
-| Dinaciclib | CDK1/2/5/9 | **1.58x** | 0.030 | * |
-| Bortezomib | Proteasome | 1.43x | 0.070 | |
-| Palbociclib | CDK4/6 | 1.29x | 0.157 | |
-| Navitoclax | BCL2/BCL-XL | 1.29x | 0.157 | |
-| Gemcitabine | DNA synthesis | 1.17x | 0.226 | |
+| Gene Target | Best Drug | n+ | n- | Selectivity | P-value |
+|-------------|-----------|----|----|-------------|---------|
+| BCL2L1 | Navitoclax | 106 | 836 | 1.24x | 0.066 |
+| PSMD7 | MG-132 | 107 | 837 | 1.03x | 0.554 |
+| CHK1 | AZD7762 | 106 | 831 | 1.00x | 0.484 |
+| CDK1 | MK-8776 | 104 | 823 | 0.94x | 0.590 |
+| KIF11 | Eg5_9814 | 80 | 614 | 0.92x | 0.743 |
+| ORC6/MCM2 | Fludarabine | 81 | 617 | 1.07x | 0.296 |
 
-**Key result:** CHK1 inhibitors show strongest ecDNA selectivity (1.93x, p=0.006), consistent with Nature 2024 validation. CDK inhibitors also significant (1.58x, p=0.030). Mean selectivity across all drugs: **1.45x**.
+**Result: No significant drug selectivity (0/28 drugs, p<0.05).** Navitoclax (BCL-XL inhibitor) shows a trend toward ecDNA+ selectivity (1.24x, p=0.066) but does not reach significance.
+
+**Why drug sensitivity ≠ genetic dependency:**
+This negative result is consistent with the literature - our vulnerability hits were identified via **CRISPR genetic dependency** (gene knockout), not drug sensitivity. These measure different things:
+1. CRISPR knockout fully ablates gene function; drugs achieve partial inhibition
+2. Drug IC50 reflects pharmacokinetics and off-target effects, not just on-target vulnerability
+3. ecDNA status alone may be insufficient; copy number level and specific amplicon matter
+4. The Nature 2024 CHK1 validation used a **purpose-designed** inhibitor (BBI-2779/BBI-355), not existing CHK1 drugs like AZD7762
+5. Tissue-type confounding: ecDNA prevalence varies across lineages
+
+This motivates the need for ecDNA-specific drug design (as Boundless Bio is doing with BBI-355, BBI-940, BBI-825) rather than repurposing existing drugs.
 
 **Files:**
 - `data/validation/circularode_lange_validation.csv`
-- `data/validation/vulncausal_gdsc_validation.csv`
+- `data/validation/vulncausal_gdsc_real_validation.csv`
+- `scripts/validate_vulncausal_gdsc_real.py`
 
 ## Target Performance
 
