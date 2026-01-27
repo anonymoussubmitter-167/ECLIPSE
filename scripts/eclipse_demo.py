@@ -64,8 +64,13 @@ class PatientStratification:
         for v in self.vulnerabilities[:5]:
             gene = v.get('gene', 'Unknown')
             effect = v.get('effect', 0)
-            category = v.get('category', '')[:15]
-            lines.append(f"║    {gene:<10}: effect = {effect:>7.3f}  |  {category:<15}                  ║\n")
+            # Handle string or numeric effect
+            try:
+                effect_str = f"{float(effect):>7.3f}"
+            except (ValueError, TypeError):
+                effect_str = f"{str(effect):>7}"
+            category = str(v.get('category', ''))[:15]
+            lines.append(f"║    {gene:<10}: effect = {effect_str}  |  {category:<15}                  ║\n")
         return ''.join(lines)
 
     def _format_recommendations(self):
