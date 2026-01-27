@@ -536,24 +536,103 @@ Run the full ECLIPSE patient stratification pipeline:
 python scripts/eclipse_demo.py
 ```
 
-Example output for a high-risk patient:
+**Demo Output (3 Cases):**
+
 ```
+================================================================================
+                    ECLIPSE FRAMEWORK DEMONSTRATION
+================================================================================
+Initializing ECLIPSE on cuda...
+  Loaded CircularODE (CN mean=8.7, std=19.2)
+  Models loaded (using inference mode)
+  Loaded 9 validated vulnerabilities
+ECLIPSE initialized successfully!
+
+--------------------------------------------------------------------------------
+CASE 1: High-risk patient with MYC amplification
+--------------------------------------------------------------------------------
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                      ECLIPSE Patient Stratification                          ║
 ║                      Patient ID: TCGA-HIGH-001                               ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  ecDNA Probability:  78.3%                                                   ║
+║  ecDNA Probability:  72.1%                                                   ║
 ║  Risk Level: HIGH                                                            ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  Treatment Predictions (Copy Number at Day 100):                             ║
-║    targeted       : CN =  12.8  |  Resistance prob = 22.0%                   ║
-║    maintenance    : CN =   8.2  |  Resistance prob = 16.5%                   ║
+║    none           : CN =  51.5  |  Resistance prob = 43.5%                   ║
+║    targeted       : CN =  17.0  |  Resistance prob = 29.0%                   ║
+║    chemo          : CN =  13.4  |  Resistance prob = 58.0%                   ║
+║    maintenance    : CN =  24.3  |  Resistance prob = 21.8%                   ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
 ║  Top Vulnerabilities:                                                        ║
-║    CHK1      : effect =  -0.150  |  DNA damage (VALIDATED)                   ║
-║    CDK1      : effect =  -0.103  |  Cell cycle                               ║
+║    ORC6      : effect =  -0.083  |  DNA replication                          ║
+║    MCM2      : effect =  -0.089  |  DNA replication                          ║
 ║    KIF11     : effect =  -0.092  |  Mitosis                                  ║
+║    NDC80     : effect =  -0.092  |  Mitosis                                  ║
+║    PSMD7     : effect =  -0.095  |  Proteasome                               ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  Recommendations:                                                            ║
+║    • ⚠️  HIGH ecDNA probability - recommend targeted monitoring              ║
+║    • 📊 Model predicts best CN reduction with: chemo therapy                 ║
+║    • ⚡ Elevated resistance risk with: chemo                                  ║
+║    • 💊 VALIDATED targets (clinical trials): CHK1                            ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
+
+--------------------------------------------------------------------------------
+CASE 2: Low-risk patient without amplification
+--------------------------------------------------------------------------------
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                      ECLIPSE Patient Stratification                          ║
+║                      Patient ID: TCGA-LOW-002                                ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  ecDNA Probability:  24.0%                                                   ║
+║  Risk Level: LOW                                                             ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  Treatment Predictions (Copy Number at Day 100):                             ║
+║    N/A (low ecDNA risk)                                                      ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  Recommendations:                                                            ║
+║    • ✓  Low ecDNA probability - standard treatment protocols                 ║
+║    • 📋 Continue routine genomic monitoring                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+--------------------------------------------------------------------------------
+CASE 3: Moderate-risk patient with EGFR amplification
+--------------------------------------------------------------------------------
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                      ECLIPSE Patient Stratification                          ║
+║                      Patient ID: TCGA-MOD-003                                ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  ecDNA Probability:  51.2%                                                   ║
+║  Risk Level: MODERATE                                                        ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  Treatment Predictions (Copy Number at Day 100):                             ║
+║    none           : CN =  40.7  |  Resistance prob = 40.5%                   ║
+║    targeted       : CN =   5.1  |  Resistance prob = 27.0%                   ║
+║    chemo          : CN =   9.5  |  Resistance prob = 54.0%                   ║
+║    maintenance    : CN =  25.4  |  Resistance prob = 20.2%                   ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  Recommendations:                                                            ║
+║    • ⚠️  HIGH ecDNA probability - recommend targeted monitoring              ║
+║    • 📊 Model predicts best CN reduction with: targeted therapy              ║
+║    • ⚡ Elevated resistance risk with: chemo                                  ║
+║    • 💊 VALIDATED targets (clinical trials): CHK1                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+================================================================================
+DEMONSTRATION COMPLETE
+================================================================================
+
+ECLIPSE integrates three complementary analyses:
+
+  Module 1 (ecDNA-Former): Predicts ecDNA probability from genomic features
+           → Achieved 0.773 AUROC, 92% recall on validation data
+
+  Module 2 (CircularODE): Models copy number dynamics under treatment
+           → Achieved 0.993 correlation on trajectory prediction
+
+  Module 3 (VulnCausal): Identifies therapeutic vulnerabilities
+           → 9 validated targets including CHK1 (in clinical trials)
 ```
 
 ## Citation
