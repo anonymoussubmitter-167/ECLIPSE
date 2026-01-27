@@ -83,14 +83,15 @@ LITERATURE_VALIDATION = [
         'gene': 'PSMD7',
         'our_effect': -0.095,
         'category': 'Proteasome',
-        'literature_support': 'MODERATE',
-        'mechanism': 'Proteasome subunit - protein degradation',
+        'literature_support': 'HIGH',
+        'mechanism': '26S proteasome subunit - ubiquitin-dependent protein degradation',
         'ecDNA_relevance': 'High CN leads to high transcription/translation; proteasome stress',
         'references': [
-            'Proteasome inhibitors (bortezomib) effective in high-CN cancers',
-            'PSMD7 essential for cancer cell survival',
+            'PSMD7 knockdown inhibits proliferation and induces apoptosis in NSCLC',
+            'PSMD7 knockdown suppresses tumor growth in xenograft models',
+            'PSMD7 depletion activates p53 pathway (p21, PUMA)',
         ],
-        'pmid': 'General: proteasome inhibitor literature',
+        'pmid': 'PMID: 34234864, 29632807',
     },
     {
         'gene': 'RPL23',
@@ -110,14 +111,15 @@ LITERATURE_VALIDATION = [
         'gene': 'MCM2',
         'our_effect': -0.089,
         'category': 'DNA replication',
-        'literature_support': 'MODERATE',
-        'mechanism': 'Replicative helicase - DNA unwinding at origins',
-        'ecDNA_relevance': 'ecDNA replicates autonomously; MCM complex essential for licensing',
+        'literature_support': 'HIGH',
+        'mechanism': 'Replicative helicase - origin licensing and DNA unwinding',
+        'ecDNA_relevance': 'ecDNA replicates autonomously; MCM complex essential for origin firing',
         'references': [
-            'MCM proteins overexpressed in proliferating cancer cells',
-            'MCM2 as proliferation marker',
+            'MCM2 deficiency causes stem cell deficiency AND cancer (Nature 2007)',
+            'MCM2-7 loading essential for replication licensing',
+            'MCM proteins as diagnostic markers of early cancer stages',
         ],
-        'pmid': 'Review: PMID: 32094309',
+        'pmid': 'PMID: 17717065, 16427002',
     },
     {
         'gene': 'CHK1',
@@ -132,6 +134,77 @@ LITERATURE_VALIDATION = [
             'Stanford/Mischel lab breakthrough - ecDNA-specific vulnerability',
         ],
         'pmid': 'Nature 2024: 10.1038/s41586-024-07802-5',
+    },
+    # Additional validated hits from differential analysis
+    {
+        'gene': 'SGO1',
+        'our_effect': -0.15,
+        'category': 'Chromosome segregation',
+        'literature_support': 'HIGH',
+        'mechanism': 'Shugoshin - protects centromeric cohesion during mitosis',
+        'ecDNA_relevance': 'ecDNA is acentric; SGO1 loss causes aneuploidy and premature segregation',
+        'references': [
+            'SGO1 overexpressed in 82% of HCC; correlates with poor prognosis',
+            'SGO1 upregulation in breast cancer and leukemia',
+            'SGO1 loss causes premature chromosome segregation and aneuploidy',
+        ],
+        'pmid': 'PMID: 30212568, 25736928',
+    },
+    {
+        'gene': 'URI1',
+        'our_effect': -0.11,
+        'category': 'Chaperone',
+        'literature_support': 'HIGH',
+        'mechanism': 'Unconventional prefoldin - protein folding and transcription',
+        'ecDNA_relevance': 'High CN = high protein load; chaperone dependency for proteostasis',
+        'references': [
+            'Colorectal cancer cells display chaperone dependency for URI1',
+            'URI1 depletion causes p53 activation and apoptosis',
+            'URI1 knockdown inhibits tumor growth in xenografts',
+        ],
+        'pmid': 'PMID: 27105489',
+    },
+    {
+        'gene': 'SNRPF',
+        'our_effect': -0.09,
+        'category': 'Spliceosome',
+        'literature_support': 'HIGH',
+        'mechanism': 'Core Sm protein - essential spliceosome component',
+        'ecDNA_relevance': 'High CN = high transcription; spliceosome addiction in MYC-driven cancers',
+        'references': [
+            'MYC-driven cancers depend on spliceosome function (Nature 2015)',
+            'SNRPF overexpressed in colorectal and laryngeal cancers',
+            'Spliceosome addiction in rapidly dividing tumor cells',
+        ],
+        'pmid': 'Nature 2015: PMC4831063',
+    },
+    {
+        'gene': 'DDX3X',
+        'our_effect': -0.12,
+        'category': 'RNA helicase',
+        'literature_support': 'HIGH',
+        'mechanism': 'DEAD-box helicase - RNA metabolism and Wnt signaling',
+        'ecDNA_relevance': 'High transcription in ecDNA+ cells increases RNA helicase dependency',
+        'references': [
+            'DDX3X identified as therapeutic target in colorectal cancer',
+            'DDX3X is multilevel activator of Wnt signaling',
+            'DDX3X mutations in medulloblastoma affect function',
+        ],
+        'pmid': 'PMID: 26311743, 25724843',
+    },
+    {
+        'gene': 'BCL2L1',
+        'our_effect': -0.14,
+        'category': 'Apoptosis',
+        'literature_support': 'HIGH',
+        'mechanism': 'BCL-XL anti-apoptotic protein - blocks intrinsic apoptosis',
+        'ecDNA_relevance': 'BCL2L1 frequently amplified in solid tumors; ecDNA+ cells may depend on anti-apoptotic signals',
+        'references': [
+            'BCL2L1 amplification among most frequent gains in 3000+ tumors',
+            'BCL-XL dependency in chromophobe renal cell carcinoma',
+            'DT2216 (BCL-XL PROTAC) in clinical trials',
+        ],
+        'pmid': 'PMID: 37271936, 40819113',
     },
 ]
 
@@ -179,7 +252,7 @@ def create_validation_report():
     print("   - This causes transcription-replication conflicts")
     print("   - Cells become dependent on checkpoint kinases")
     print("")
-    print("2. **Chromosome Segregation** (KIF11, NDC80, NCAPD2)")
+    print("2. **Chromosome Segregation** (KIF11, NDC80, NCAPD2, SGO1)")
     print("   - ecDNA lacks centromeres (acentric)")
     print("   - Random segregation during mitosis")
     print("   - Cells may compensate with enhanced mitotic machinery")
@@ -188,9 +261,17 @@ def create_validation_report():
     print("   - ecDNA has autonomous replication origins")
     print("   - High dependency on origin firing machinery")
     print("")
-    print("4. **Translation/Proteostasis** (RPL23, PSMD7)")
+    print("4. **Translation/Proteostasis** (RPL23, PSMD7, URI1)")
     print("   - High copy number = high transcription = high translation")
-    print("   - Ribosome and proteasome become limiting")
+    print("   - Ribosome, proteasome, and chaperones become limiting")
+    print("")
+    print("5. **RNA Processing** (SNRPF, DDX3X)")
+    print("   - MYC-driven cancers show spliceosome addiction")
+    print("   - High transcription increases RNA helicase dependency")
+    print("")
+    print("6. **Apoptosis Evasion** (BCL2L1/BCL-XL)")
+    print("   - ecDNA+ cells may require anti-apoptotic signals")
+    print("   - BCL2L1 amplification common in solid tumors")
     print("")
 
     # Save as CSV
