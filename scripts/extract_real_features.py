@@ -176,15 +176,14 @@ def main():
     n = len(y)
     indices = np.random.permutation(n)
 
-    n_train = int(n * 0.7)
     n_val = int(n * 0.15)
+    n_train = n - n_val
 
     train_idx = indices[:n_train]
-    val_idx = indices[n_train:n_train + n_val]
-    test_idx = indices[n_train + n_val:]
+    val_idx = indices[n_train:]
 
     # Save features
-    for split_name, split_idx in [('train', train_idx), ('val', val_idx), ('test', test_idx)]:
+    for split_name, split_idx in [('train', train_idx), ('val', val_idx)]:
         # Create feature dict matching model expectations
         n_samples = len(split_idx)
 

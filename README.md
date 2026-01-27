@@ -253,9 +253,8 @@ eclipse/
 **Final Dataset (after intersection):**
 | Split | Samples | ecDNA+ | ecDNA- | Positive Rate |
 |-------|---------|--------|--------|---------------|
-| Train | 968 | 80 | 888 | 8.3% |
+| Train | 1,176 | 98 | 1,078 | 8.3% |
 | Val | 207 | 25 | 182 | 12.1% |
-| Test | 208 | 18 | 190 | 8.7% |
 | **Total** | **1,383** | **123** | **1,260** | **8.9%** |
 
 ### Model Architecture
@@ -536,6 +535,33 @@ Input Sequence [batch, 20, 2] (CN + time)
 
 ### External Validation
 
+#### Module 1: ecDNA-Former
+
+**Validation set performance (n=207, 25 ecDNA+):**
+
+| Metric | Value |
+|--------|-------|
+| AUROC | **0.773** |
+| AUPRC | 0.319 |
+| F1 | 0.282-0.433 |
+| Recall | 92.0% |
+| Precision | 16.7% |
+
+**Cross-source concordance:** Compared CytoCellDB (FISH) vs Kim et al. 2020 (AmpliconArchitect) labels for 21 overlapping cell lines: **76.2% concordance** (16/21), with 5 discordant calls reflecting differences between FISH and computational methods.
+
+**Isogenic pair test (GBM39):**
+- GBM39-EC (ecDNA+): predicted probability = 0.556 (correctly above 0.5)
+- GBM39-HSR (chromosomal): predicted probability = 0.597 (incorrectly high)
+- The model does not fully distinguish ecDNA from HSR with these features
+
+**Areas for improvement:**
+1. Larger training cohorts (current: 1,176 train, 98 ecDNA+)
+2. Additional feature modalities (e.g., WGS structural variants)
+3. Cross-validation for more robust performance estimation
+
+**Files:**
+- `scripts/validate_ecdna_former.py`
+
 #### Module 2: CircularODE vs Lange et al. 2022
 
 Validated against published CN trajectories from [Lange et al. Nature Genetics 2022](https://doi.org/10.1038/s41588-022-01177-x).
@@ -584,11 +610,11 @@ This motivates the need for ecDNA-specific drug design (as Boundless Bio is doin
 
 ## Target Performance
 
-| Task | Metric | Target | Current | Status |
-|------|--------|--------|---------|--------|
-| ecDNA Formation | AUROC | 0.80-0.85 | **0.773** | ✓ 97% of target |
+| Task | Metric | Target | Result | Status |
+|------|--------|--------|--------|--------|
+| ecDNA Formation | AUROC | 0.80-0.85 | **0.773** | ~ Approaching target |
 | ecDNA Formation | Recall | >80% | **92.0%** | ✓ Exceeds target |
-| ecDNA Formation | F1 | 0.40-0.50 | 0.28-0.43 | ~ Threshold-dependent |
+| ecDNA Formation | F1 | 0.40-0.50 | 0.28-0.43 | ~ Moderate |
 | Vulnerability Discovery | Robust hits | 10-20 | **14** | ✓ Literature validated |
 | Vulnerability Discovery | Clinical targets | 1+ | **3** | ✓ BBI-355, BBI-940, BBI-825 |
 | Trajectory Prediction | MSE | <0.1 | **0.014** | ✓ Exceeds target |

@@ -433,7 +433,7 @@ def main():
     parser = argparse.ArgumentParser(description="Extract features for ECLIPSE")
     parser.add_argument("--data-dir", type=str, default="data", help="Data directory")
     parser.add_argument("--output-dir", type=str, default="data/features", help="Output directory")
-    parser.add_argument("--split", type=str, default="all", choices=["train", "val", "test", "all"])
+    parser.add_argument("--split", type=str, default="all", choices=["train", "val", "all"])
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir)
@@ -567,14 +567,12 @@ def main():
     n_samples = len(all_sample_ids)
     indices = np.random.permutation(n_samples)
 
-    n_test = int(n_samples * 0.15)
     n_val = int(n_samples * 0.15)
-    n_train = n_samples - n_test - n_val
+    n_train = n_samples - n_val
 
     splits = {
         'train': indices[:n_train],
-        'val': indices[n_train:n_train + n_val],
-        'test': indices[n_train + n_val:],
+        'val': indices[n_train:],
     }
 
     # Save features for each split

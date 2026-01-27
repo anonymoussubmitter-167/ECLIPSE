@@ -204,7 +204,7 @@ def predict(args):
 
 
 def evaluate(args):
-    """Evaluate model on test set."""
+    """Evaluate model on validation set."""
     import torch
     from src.utils.metrics import compute_all_metrics
 
@@ -231,7 +231,7 @@ Examples:
   python main.py predict --checkpoint checkpoints/eclipse.pt --input sample.pt
 
   # Evaluate model
-  python main.py evaluate --checkpoint checkpoints/eclipse.pt --test-data test.pt
+  python main.py evaluate --checkpoint checkpoints/eclipse.pt --val-data val.pt
         """
     )
 
@@ -279,8 +279,8 @@ Examples:
     eval_parser = subparsers.add_parser("evaluate", help="Evaluate model")
     eval_parser.add_argument("--checkpoint", type=str, required=True,
                              help="Model checkpoint path")
-    eval_parser.add_argument("--test-data", type=str, required=True,
-                             help="Test data path")
+    eval_parser.add_argument("--val-data", type=str, required=True,
+                             help="Validation data path")
 
     args = parser.parse_args()
 

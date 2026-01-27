@@ -130,7 +130,6 @@ class ECDNADataset(Dataset):
         data_dir: Union[str, Path],
         split: str = "train",
         val_ratio: float = 0.15,
-        test_ratio: float = 0.15,
         seed: int = 42,
         **kwargs
     ) -> "ECDNADataset":
@@ -139,9 +138,8 @@ class ECDNADataset(Dataset):
 
         Args:
             data_dir: Path to data directory
-            split: One of "train", "val", "test"
+            split: One of "train", "val"
             val_ratio: Validation set ratio
-            test_ratio: Test set ratio
             seed: Random seed for splitting
         """
         data_dir = Path(data_dir)
@@ -166,16 +164,13 @@ class ECDNADataset(Dataset):
         n_samples = len(sample_ids)
         indices = np.random.permutation(n_samples)
 
-        n_test = int(n_samples * test_ratio)
         n_val = int(n_samples * val_ratio)
-        n_train = n_samples - n_test - n_val
+        n_train = n_samples - n_val
 
         if split == "train":
             split_indices = indices[:n_train]
         elif split == "val":
-            split_indices = indices[n_train:n_train + n_val]
-        elif split == "test":
-            split_indices = indices[n_train + n_val:]
+            split_indices = indices[n_train:]
         else:
             raise ValueError(f"Unknown split: {split}")
 
@@ -477,7 +472,6 @@ class DynamicsDataset(Dataset):
         data_dir: Union[str, Path],
         split: str = "train",
         val_ratio: float = 0.15,
-        test_ratio: float = 0.15,
         seed: int = 42,
         **kwargs
     ) -> "DynamicsDataset":
@@ -486,9 +480,8 @@ class DynamicsDataset(Dataset):
 
         Args:
             data_dir: Path to trajectories directory
-            split: One of "train", "val", "test"
+            split: One of "train", "val"
             val_ratio: Validation ratio
-            test_ratio: Test ratio
             seed: Random seed
         """
         import glob
@@ -522,16 +515,13 @@ class DynamicsDataset(Dataset):
         n = len(trajectories)
         indices = np.random.permutation(n)
 
-        n_test = int(n * test_ratio)
         n_val = int(n * val_ratio)
-        n_train = n - n_test - n_val
+        n_train = n - n_val
 
         if split == "train":
             split_indices = indices[:n_train]
         elif split == "val":
-            split_indices = indices[n_train:n_train + n_val]
-        elif split == "test":
-            split_indices = indices[n_train + n_val:]
+            split_indices = indices[n_train:]
         else:
             raise ValueError(f"Unknown split: {split}")
 
@@ -759,7 +749,6 @@ class VulnerabilityDataset(Dataset):
         data_dir: Union[str, Path],
         split: str = "train",
         val_ratio: float = 0.15,
-        test_ratio: float = 0.15,
         seed: int = 42,
         **kwargs
     ) -> "VulnerabilityDataset":
@@ -768,7 +757,7 @@ class VulnerabilityDataset(Dataset):
 
         Args:
             data_dir: Path to data directory
-            split: One of "train", "val", "test"
+            split: One of "train", "val"
         """
         data_dir = Path(data_dir)
 
@@ -817,16 +806,13 @@ class VulnerabilityDataset(Dataset):
         np.random.seed(seed)
         indices = np.random.permutation(len(common_ids))
 
-        n_test = int(len(common_ids) * test_ratio)
         n_val = int(len(common_ids) * val_ratio)
-        n_train = len(common_ids) - n_test - n_val
+        n_train = len(common_ids) - n_val
 
         if split == "train":
             split_indices = indices[:n_train]
         elif split == "val":
-            split_indices = indices[n_train:n_train + n_val]
-        elif split == "test":
-            split_indices = indices[n_train + n_val:]
+            split_indices = indices[n_train:]
         else:
             raise ValueError(f"Unknown split: {split}")
 

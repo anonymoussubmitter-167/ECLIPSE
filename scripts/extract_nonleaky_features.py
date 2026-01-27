@@ -328,18 +328,17 @@ def main():
     np.random.seed(42)
     indices = np.random.permutation(len(all_features))
 
-    n_train = int(len(indices) * 0.7)
     n_val = int(len(indices) * 0.15)
+    n_train = len(indices) - n_val
 
     train_idx = indices[:n_train]
-    val_idx = indices[n_train:n_train + n_val]
-    test_idx = indices[n_train + n_val:]
+    val_idx = indices[n_train:]
 
     # Get feature columns (exclude label)
     feature_cols = [c for c in all_features.columns if c != 'ecdna_positive']
 
     # Save as npz files
-    for split_name, split_idx in [('train', train_idx), ('val', val_idx), ('test', test_idx)]:
+    for split_name, split_idx in [('train', train_idx), ('val', val_idx)]:
         split_data = all_features.iloc[split_idx]
 
         X = split_data[feature_cols].values.astype(np.float32)

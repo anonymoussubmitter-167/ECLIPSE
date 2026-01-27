@@ -4,7 +4,7 @@ Data processing pipelines for ECLIPSE.
 Handles:
 - Feature extraction from raw genomic data
 - Sample/identifier harmonization across datasets
-- Train/validation/test split generation
+- Train/validation split generation
 - Data augmentation for ecDNA
 """
 
@@ -160,48 +160,37 @@ class DataProcessor:
 
     def get_split_data(
         self,
-        test_size: float = 0.2,
-        val_size: float = 0.1,
+        val_size: float = 0.15,
         stratify_by: str = "ecdna_positive",
         random_state: int = 42
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Split data into train/validation/test sets.
+        Split data into train/validation sets.
 
         Args:
-            test_size: Fraction for test set
             val_size: Fraction for validation set
             stratify_by: Column to stratify by
             random_state: Random seed
 
         Returns:
-            Tuple of (train_df, val_df, test_df)
+            Tuple of (train_df, val_df)
         """
         if self._unified_data is None:
             self.process()
 
         data = self._unified_data.dropna(subset=[stratify_by])
 
-        # First split: train+val vs test
-        train_val, test = train_test_split(
+        # Split: train vs val
+        train, val = train_test_split(
             data,
-            test_size=test_size,
+            test_size=val_size,
             stratify=data[stratify_by],
             random_state=random_state
         )
 
-        # Second split: train vs val
-        val_ratio = val_size / (1 - test_size)
-        train, val = train_test_split(
-            train_val,
-            test_size=val_ratio,
-            stratify=train_val[stratify_by],
-            random_state=random_state
-        )
+        logger.info(f"Split: train={len(train)}, val={len(val)}")
 
-        logger.info(f"Split: train={len(train)}, val={len(val)}, test={len(test)}")
-
-        return train, val, test
+        return train, val
 
 
 class FeatureExtractor:
@@ -386,7 +375,7 @@ class FeatureExtractor:
 
 class SplitGenerator:
     """
-    Generate train/validation/test splits with various strategies.
+    Generate train/validation splits with various strategies.
     """
 
     def __init__(self, random_state: int = 42):
@@ -396,10 +385,9 @@ class SplitGenerator:
         self,
         data: pd.DataFrame,
         stratify_col: str,
-        train_size: float = 0.7,
+        train_size: float = 0.85,
         val_size: float = 0.15,
-        test_size: float = 0.15,
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
         Create stratified splits.
 
@@ -408,34 +396,24 @@ class SplitGenerator:
             stratify_col: Column to stratify by
             train_size: Fraction for training
             val_size: Fraction for validation
-            test_size: Fraction for test
 
         Returns:
-            Tuple of (train, val, test) DataFrames
+            Tuple of (train, val) DataFrames
         """
-        assert abs(train_size + val_size + test_size - 1.0) < 0.001
+        assert abs(train_size + val_size - 1.0) < 0.001
 
         # Remove samples with missing stratification column
         data = data.dropna(subset=[stratify_col])
 
-        # First split: train vs (val + test)
-        train, temp = train_test_split(
+        # Split: train vs val
+        train, val = train_test_split(
             data,
             train_size=train_size,
             stratify=data[stratify_col],
             random_state=self.random_state
         )
 
-        # Second split: val vs test
-        val_ratio = val_size / (val_size + test_size)
-        val, test = train_test_split(
-            temp,
-            train_size=val_ratio,
-            stratify=temp[stratify_col],
-            random_state=self.random_state
-        )
-
-        return train, val, test
+        return train, val
 
     def cross_validation_splits(
         self,
@@ -500,16 +478,14 @@ class SplitGenerator:
 def create_ecdna_dataset_split(
     cytocell_loader,
     depmap_loader,
-    test_size: float = 0.2,
-    val_size: float = 0.1,
+    val_size: float = 0.15,
 ) -> Dict[str, List[str]]:
     """
-    Create standard train/val/test splits for ecDNA prediction.
+    Create standard train/val splits for ecDNA prediction.
 
     Args:
         cytocell_loader: CytoCellDBLoader instance
         depmap_loader: DepMapLoader instance
-        test_size: Fraction for test set
         val_size: Fraction for validation set
 
     Returns:
@@ -525,16 +501,14 @@ def create_ecdna_dataset_split(
 
     # Stratified split
     generator = SplitGenerator()
-    train, val, test = generator.stratified_split(
+    train, val = generator.stratified_split(
         valid_data,
         stratify_col="ecdna_status",
-        train_size=1 - test_size - val_size,
+        train_size=1 - val_size,
         val_size=val_size,
-        test_size=test_size
     )
 
     return {
         "train": train["depmap_id"].tolist(),
         "val": val["depmap_id"].tolist(),
-        "test": test["depmap_id"].tolist(),
     }
