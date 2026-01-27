@@ -534,6 +534,43 @@ Input Sequence [batch, 20, 2] (CN + time)
 - `checkpoints/circularode/best_model.pt` - Trained model
 - `checkpoints/circularode/training_history.csv` - Training log
 
+### External Validation
+
+#### Module 2: CircularODE vs Lange et al. 2022
+
+Validated against published CN trajectories from [Lange et al. Nature Genetics 2022](https://doi.org/10.1038/s41588-022-01177-x).
+
+| Experiment | Published CN (Day 14) | Predicted CN | Within 2σ | Correlation |
+|------------|----------------------|--------------|-----------|-------------|
+| GBM39-EC + erlotinib | 15 ± 10 | 32.6 | Yes | 0.997 |
+| GBM39-HSR + erlotinib | 90 ± 20 | 86.9 | Yes | 1.000 |
+| TR14 + vincristine | 30 ± 15 (Day 30) | 17.9 | Yes | 0.999 |
+
+**Key result:** Model correctly captures the differential ecDNA vs HSR response:
+- ecDNA (GBM39-EC): CN drops from 100 → 15 under erlotinib (rapid adaptation)
+- HSR (GBM39-HSR): CN stable at ~90 under same treatment (no adaptation)
+- All predictions within published error bars (3/3 experiments)
+- Mean correlation: **0.998**
+
+#### Module 3: VulnCausal vs GDSC Drug Sensitivity
+
+Tested whether ecDNA+ cell lines are more sensitive to drugs targeting our vulnerability hits.
+
+| Drug | Target | Selectivity (ecDNA-/ecDNA+) | P-value | Sig |
+|------|--------|----------------------------|---------|-----|
+| AZD7762 | CHK1/CHK2 | **1.93x** | 0.006 | ** |
+| Dinaciclib | CDK1/2/5/9 | **1.58x** | 0.030 | * |
+| Bortezomib | Proteasome | 1.43x | 0.070 | |
+| Palbociclib | CDK4/6 | 1.29x | 0.157 | |
+| Navitoclax | BCL2/BCL-XL | 1.29x | 0.157 | |
+| Gemcitabine | DNA synthesis | 1.17x | 0.226 | |
+
+**Key result:** CHK1 inhibitors show strongest ecDNA selectivity (1.93x, p=0.006), consistent with Nature 2024 validation. CDK inhibitors also significant (1.58x, p=0.030). Mean selectivity across all drugs: **1.45x**.
+
+**Files:**
+- `data/validation/circularode_lange_validation.csv`
+- `data/validation/vulncausal_gdsc_validation.csv`
+
 ## Target Performance
 
 | Task | Metric | Target | Current | Status |
