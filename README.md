@@ -771,7 +771,6 @@ If you use ECLIPSE in your research, please cite:
   title={ECLIPSE: Extrachromosomal Circular DNA Learning for Integrated
          Prediction of Synthetic-lethality and Expression},
   author={ECLIPSE Team},
-  journal={bioRxiv},
   year={2026}
 }
 ```
