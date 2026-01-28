@@ -432,13 +432,13 @@ def demo():
 ECLIPSE integrates three complementary analyses:
 
   Module 1 (ecDNA-Former): Predicts ecDNA probability from genomic features
-           → Achieved 0.773 AUROC, 92% recall on validation data
+           → Achieved 0.801 AUROC on validation data
 
   Module 2 (CircularODE): Models copy number dynamics under treatment
            → Achieved 0.993 correlation on trajectory prediction
 
   Module 3 (VulnCausal): Identifies therapeutic vulnerabilities
-           → 9 validated targets including CHK1 (in clinical trials)
+           → 14 validated targets including CHK1 (in clinical trials)
 
 For clinical use, combine with:
   - FISH validation of ecDNA status
