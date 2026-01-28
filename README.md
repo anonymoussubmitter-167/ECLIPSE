@@ -440,8 +440,8 @@ MYC, MYCN, MYCL1, EGFR, ERBB2, CDK4, CDK6, MDM2, MDM4, CCND1, CCNE1, FGFR1, FGFR
 
 | Gene | Effect | Category | Literature Support | PMID |
 |------|--------|----------|-------------------|------|
-| **CHK1** | N/A | DNA damage | VALIDATED - BBI-355 in Phase 1/2 trials | Nature 2024 |
-| **CDK1** | -0.103 | Cell cycle | HIGH - CHK1 upstream, ecDNA vulnerability | Nature 2024 |
+| **CHK1** | N/A | DNA damage | VALIDATED - BBI-355 in Phase 1/2 trials | 39506153 |
+| **CDK1** | -0.103 | Cell cycle | HIGH - CHK1 upstream, ecDNA vulnerability | 39506153 |
 | **KIF11** | -0.092 | Mitosis | HIGH - Spindle motor, BBI-940 target | 26941320 |
 | **NCAPD2** | -0.117 | Condensin | HIGH - Chromosome condensation | 35348268 |
 | **SGO1** | -0.15 | Segregation | HIGH - Shugoshin, centromeric cohesion | 30212568 |
@@ -451,7 +451,7 @@ MYC, MYCN, MYCL1, EGFR, ERBB2, CDK4, CDK6, MDM2, MDM4, CCND1, CCNE1, FGFR1, FGFR
 | **PSMD7** | -0.095 | Proteasome | HIGH - 26S subunit, p53 activation | 34234864 |
 | **RPL23** | +0.082 | Ribosome | HIGH - Co-amplified with ERBB2 | 29534686 |
 | **URI1** | -0.11 | Chaperone | HIGH - Prefoldin, CRC dependency | 27105489 |
-| **SNRPF** | -0.09 | Spliceosome | HIGH - MYC spliceosome addiction | Nature 2015 |
+| **SNRPF** | -0.09 | Spliceosome | HIGH - MYC spliceosome addiction | 26331541 |
 | **DDX3X** | -0.12 | RNA helicase | HIGH - Wnt signaling, CRC target | 26311743 |
 | **BCL2L1** | -0.14 | Apoptosis | HIGH - BCL-XL, frequently amplified | 37271936 |
 
@@ -580,7 +580,7 @@ This concordance rate is expected given the methodological differences:
 - **FISH** (CytoCellDB): Direct microscopic visualization of extrachromosomal elements. Gold standard but limited to cell lines with available metaphase spreads.
 - **AmpliconArchitect** (Kim 2020): Computational inference from WGS data. Can detect circular amplicons but may misclassify complex rearrangements as ecDNA, or miss small/low-CN ecDNA.
 - Discordance likely arises from: (1) borderline cases where ecDNA is present at low frequency, (2) temporal differences — ecDNA can be gained/lost across passages, (3) HSR misclassification by AmpliconArchitect, which CytoCellDB's FISH correctly identifies as chromosomal.
-- For reference, inter-method concordance of 76% is comparable to published estimates of FISH vs computational ecDNA detection (Wu et al. 2019 report ~80% agreement).
+- Inter-method concordance of 76% is expected given the fundamental differences between FISH (direct visualization) and WGS-based computational detection (indirect inference).
 
 **Isogenic pair test (GBM39):**
 - GBM39-EC (ecDNA+): predicted probability = 0.068
@@ -764,14 +764,15 @@ ECLIPSE integrates three complementary analyses:
 
 ## Citation
 
-If you use ECLIPSE in your research, please cite:
+If you use ECLIPSE in your research, please cite this repository:
 
 ```bibtex
-@article{eclipse2026,
+@software{eclipse2026,
   title={ECLIPSE: Extrachromosomal Circular DNA Learning for Integrated
          Prediction of Synthetic-lethality and Expression},
-  author={ECLIPSE Team},
-  year={2026}
+  author={Cheng, Bryan},
+  year={2026},
+  url={https://github.com/bryanc5864/eclipse}
 }
 ```
 
@@ -782,7 +783,7 @@ Key papers informing this work:
 1. Kim H, et al. "Extrachromosomal DNA is associated with oncogene amplification and poor outcome across multiple cancers." *Nature Genetics* 2020.
 2. Turner KM, et al. "Extrachromosomal oncogene amplification drives tumour evolution and genetic heterogeneity." *Nature* 2017.
 3. Hung KL, et al. "ecDNA hubs drive cooperative intermolecular oncogene expression." *Nature* 2021.
-4. Rajkumar U, et al. "CytoCellDB: a comprehensive resource for exploring extrachromosomal DNA in cancer cell lines." *NAR Cancer* 2024.
+4. Fessler J, et al. "CytoCellDB: a comprehensive resource for exploring extrachromosomal DNA in cancer cell lines." *NAR Cancer* 2024.
 
 ## License
 

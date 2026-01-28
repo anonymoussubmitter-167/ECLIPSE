@@ -411,7 +411,7 @@ class DataDownloader:
         readme = """
 CytoCellDB Data
 
-Source: Rajkumar U, et al. NAR Cancer 2024
+Source: Fessler J, et al. NAR Cancer 2024
 DOI: 10.1093/narcan/zcae035
 
 Contents:

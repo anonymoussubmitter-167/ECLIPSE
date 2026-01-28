@@ -8,7 +8,7 @@ our identified vulnerability genes.
 
 Data sources:
 - GDSC2: https://www.cancerrxgene.org/ (release 8.5)
-- CytoCellDB: Rajkumar et al. NAR Cancer 2024
+- CytoCellDB: Fessler et al. NAR Cancer 2024
 """
 
 import numpy as np

@@ -7,7 +7,7 @@ Two validation approaches:
 2. Cross-source validation - compare CytoCellDB FISH labels vs Kim et al. 2020 AA labels
 
 Data sources:
-- CytoCellDB: FISH-validated ecDNA status (Rajkumar et al. NAR Cancer 2024)
+- CytoCellDB: FISH-validated ecDNA status (Fessler et al. NAR Cancer 2024)
 - Kim et al. 2020: AmpliconArchitect ecDNA calls (Nature Genetics 2020)
 - DepMap: CNV + Expression features
 """
