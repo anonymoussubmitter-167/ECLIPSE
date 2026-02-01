@@ -428,11 +428,11 @@ Note: AUPRC decreased from Gen 2 to Gen 3 (-28.9%) despite AUROC improving. This
 | 5 | oncogene_cnv_hic_weighted_max | +0.201 | 4.5e-14 | Hi-C interaction |
 | 6 | cnv_max | +0.178 | 2.5e-11 | CNV statistic |
 | 7 | oncogene_cnv_mean | +0.163 | 9.8e-10 | CNV statistic |
-| 8 | n_oncogenes_amplified | +0.160 | 2.0e-9 | CNV statistic |
-| 9 | cnv_frac_gt5 | +0.136 | 4.2e-7 | CNV statistic |
-| 10 | expr_mean | +0.122 | 5.4e-6 | Expression |
+| 8 | oncogene_cnv_hic_weighted_mean | +0.163 | 1.2e-9 | Hi-C interaction |
+| 9 | n_oncogenes_amplified | +0.160 | 2.0e-9 | CNV statistic |
+| 10 | cnv_frac_gt5 | +0.136 | 4.2e-7 | CNV statistic |
 
-MYC copy number (cnv_MYC) is the single strongest predictor (r=0.274, p=2.9e-25), consistent with MYC being the most frequently ecDNA-amplified oncogene. CNV features dominate the top 10; expression features contribute modestly.
+MYC copy number (cnv_MYC) is the single strongest predictor (r=0.274, p=2.9e-25), consistent with MYC being the most frequently ecDNA-amplified oncogene. CNV and Hi-C features dominate the top 10 (expression first appears at rank 11 with expr_mean, r=+0.122), though Hi-C features are redundant with CNV (see below).
 
 **Hi-C Feature Redundancy (Important Caveat):**
 Feature intercorrelation analysis reveals that `cnv_hic_X` features have r≈1.000 with `cnv_X` for all 20 oncogenes. This is because the Hi-C features are computed as `cnv_X × hic_density_X`, where `hic_density_X` is a reference-genome constant (GM12878). Multiplying by a constant preserves rank order perfectly. Consequently, the 40 Hi-C interaction features are essentially redundant with the 20 CNV features. **Feature ablation confirms this: removing all 45 Hi-C features improves AUROC (0.787→0.796).** The AUROC improvement from Gen 2 (67 features, 0.736) to Gen 3 (112 features, 0.801) reflects additional model capacity or random variation, not genuinely new information from chromatin topology.
@@ -681,7 +681,7 @@ Cross-referenced 944 cell lines (107 ecDNA+, 837 ecDNA-) between CytoCellDB and 
 | KIF11 | Eg5_9814 | 80 | 614 | 0.92x | 0.743 |
 | ORC6/MCM2 | Fludarabine | 81 | 617 | 1.07x | 0.296 |
 
-**Result: No significant drug selectivity (0/28 drugs, p<0.05).** Navitoclax (BCL-XL inhibitor) shows a trend toward ecDNA+ selectivity (1.24x, p=0.066) but does not reach significance. Notably, Navitoclax is the most biologically plausible hit — BCL2L1/BCL-XL had the strongest negative effect (-0.14) in our CRISPR analysis, and BCL-XL inhibition is the closest pharmacological equivalent to genetic knockout among the drugs tested.
+**Result: No significant drug selectivity (0/28 drugs, p<0.05).** Navitoclax (BCL-XL inhibitor) shows a trend toward ecDNA+ selectivity (1.24x, p=0.066) but does not reach significance. Notably, Navitoclax is the most biologically plausible hit — BCL2L1/BCL-XL had the strongest negative effect (-0.149) in our CRISPR analysis, and BCL-XL inhibition is the closest pharmacological equivalent to genetic knockout among the drugs tested.
 
 **Why drug sensitivity ≠ genetic dependency:**
 This negative result is consistent with the literature - our vulnerability hits were identified via **CRISPR genetic dependency** (gene knockout), not drug sensitivity. These measure different things:
