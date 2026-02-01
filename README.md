@@ -435,7 +435,7 @@ Note: AUPRC decreased from Gen 2 to Gen 3 (-28.9%) despite AUROC improving. This
 MYC copy number (cnv_MYC) is the single strongest predictor (r=0.274, p=2.9e-25), consistent with MYC being the most frequently ecDNA-amplified oncogene. CNV features dominate the top 10; expression features contribute modestly.
 
 **Hi-C Feature Redundancy (Important Caveat):**
-Feature intercorrelation analysis reveals that `cnv_hic_X` features have r≈1.000 with `cnv_X` for all 20 oncogenes. This is because the Hi-C features are computed as `cnv_X × hic_density_X`, where `hic_density_X` is a reference-genome constant (GM12878). Multiplying by a constant preserves rank order perfectly. Consequently, the 40 Hi-C interaction features are essentially redundant with the 20 CNV features. The AUROC improvement from Gen 2 (67 features, 0.736) to Gen 3 (112 features, 0.801) may reflect additional model capacity or the 5 Hi-C summary statistics, not genuinely new information from chromatin topology. A proper ablation study is needed to resolve this.
+Feature intercorrelation analysis reveals that `cnv_hic_X` features have r≈1.000 with `cnv_X` for all 20 oncogenes. This is because the Hi-C features are computed as `cnv_X × hic_density_X`, where `hic_density_X` is a reference-genome constant (GM12878). Multiplying by a constant preserves rank order perfectly. Consequently, the 40 Hi-C interaction features are essentially redundant with the 20 CNV features. **Feature ablation confirms this: removing all 45 Hi-C features improves AUROC (0.787→0.796).** The AUROC improvement from Gen 2 (67 features, 0.736) to Gen 3 (112 features, 0.801) reflects additional model capacity or random variation, not genuinely new information from chromatin topology.
 
 Additional notable intercorrelations: `cnv_PDGFRA` ↔ `cnv_KIT` (r=0.838, same chromosome arm 4q12), `expr_mean` ↔ `expr_frac_high` (r=0.973), `cnv_X` ↔ `dosage_X` (r>0.83 for most oncogenes).
 
@@ -727,6 +727,47 @@ The cross-validated AUROC (0.729 ± 0.042) is lower than the single-split AUROC 
 
 The ecDNA-Former significantly outperforms random (permutation p = 0.0005) but the advantage over Random Forest is not significant at α = 0.05 (p = 0.075), likely due to only 10 ecDNA+ validation samples.
 
+#### Feature Ablation Study (Module 1)
+
+To quantify the contribution of each feature group, we retrained ecDNA-Former from scratch with each group zero-masked:
+
+| Configuration | Features Zeroed | AUROC | AUPRC | F1 | MCC |
+|--------------|----------------|-------|-------|-----|-----|
+| Full (baseline) | 0 | 0.787 | 0.349 | 0.219 | 0.132 |
+| **minus Hi-C** | **45** | **0.796** | **0.368** | 0.175 | 0.105 |
+| minus CNV | 31 | 0.783 | 0.380 | 0.152 | 0.000 |
+| minus Expression | 27 | 0.776 | 0.355 | 0.162 | 0.081 |
+| **minus Dosage** | **9** | **0.811** | 0.341 | **0.321** | **0.261** |
+
+**Key finding: Removing Hi-C features *improves* AUROC** (0.787 → 0.796), confirming the Hi-C redundancy concern — the 45 Hi-C features contribute no predictive value and may add noise. Removing dosage features also improves performance (0.787 → 0.811), suggesting CNV×Expression interaction terms are not useful. Removing CNV or expression causes only marginal AUROC drops (~0.01), indicating the model is robust to individual feature group ablation.
+
+Note: The ablation "Full" baseline (0.787) is lower than the reported single-split AUROC (0.801) because the model was retrained from scratch with a different random seed.
+
+#### Lineage Leave-One-Out Cross-Validation (Module 1)
+
+To test whether the model generalizes across cancer types (rather than memorizing lineage-specific patterns), we trained on all-but-one lineage and evaluated on the held-out lineage:
+
+| Lineage | N_val | ecDNA+ | AUROC | AUPRC | F1 | MCC |
+|---------|-------|--------|-------|-------|-----|-----|
+| blood | 102 | 4 | **0.939** | 0.365 | 0.545 | 0.544 |
+| bone | 38 | 4 | **0.912** | 0.575 | 0.600 | 0.557 |
+| kidney | 38 | 4 | 0.772 | 0.342 | 0.000 | 0.000 |
+| lung | 205 | 34 | 0.707 | 0.480 | 0.456 | 0.382 |
+| ovary | 63 | 5 | 0.707 | 0.214 | 0.170 | 0.083 |
+| colorectal | 70 | 11 | 0.684 | 0.482 | 0.364 | 0.245 |
+| CNS | 83 | 12 | 0.668 | 0.276 | 0.250 | 0.227 |
+| pancreas | 52 | 3 | 0.646 | 0.130 | 0.109 | 0.000 |
+| gastric | 40 | 5 | 0.611 | 0.401 | 0.364 | 0.265 |
+| breast | 62 | 15 | 0.611 | 0.418 | 0.390 | 0.000 |
+| PNS | 32 | 4 | 0.607 | 0.181 | 0.222 | 0.000 |
+| skin | 85 | 3 | 0.528 | 0.050 | 0.068 | 0.000 |
+| urinary_tract | 36 | 4 | 0.445 | 0.131 | 0.222 | 0.081 |
+| soft_tissue | 59 | 4 | 0.455 | 0.076 | 0.127 | 0.000 |
+
+**Mean AUROC across lineages: ~0.66** (vs 0.801 pooled, 0.729 cross-validated).
+
+The model generalizes well to blood (0.939) and bone (0.912) cancers but poorly to soft tissue (0.455), urinary tract (0.445), and skin (0.528). This high variance (0.445–0.939) indicates the model partially relies on lineage-specific patterns rather than universal ecDNA features. Lineages with very few positives (3–4) have unreliable estimates.
+
 #### Null Baseline (Module 3: Vulnerability Discovery)
 
 To test whether the 14/47 literature-validated genes could arise by chance, we sampled 100,000 random gene sets of size 47 from 17,453 genes and counted overlap with validation categories:
@@ -784,13 +825,14 @@ The dominant enrichment for mitotic nuclear division and cell cycle pathways is 
 ## Known Limitations
 
 1. **Single train/val split**: Module 1 headline metrics (AUROC 0.801) are from a single 85/15 split with only 10 ecDNA+ validation samples. 5-fold CV gives a more conservative estimate of 0.729 ± 0.042 (see Statistical Validation).
-2. **Hi-C feature redundancy**: Feature intercorrelation analysis shows cnv_hic_X features are perfectly correlated (r≈1.0) with cnv_X because Hi-C densities are reference-genome constants. The 40 "Hi-C interaction" features are redundant with CNV features. The Gen 2→Gen 3 AUROC improvement (0.736→0.801) may reflect additional model capacity, not new information. Feature ablation is needed to quantify actual Hi-C contribution.
+2. **Hi-C features provide no value**: Feature ablation confirms that removing all 45 Hi-C features *improves* AUROC (0.787→0.796). Intercorrelation analysis shows cnv_hic_X features are perfectly correlated (r≈1.0) with cnv_X because Hi-C densities are reference-genome constants. The Gen 2→Gen 3 AUROC improvement (0.736→0.801) reflects additional model capacity or random variation, not new information from chromatin topology.
 3. **CircularODE trained on synthetic data**: All trajectory training data is simulated. The model has not been validated on real longitudinal ecDNA copy number measurements. The 0.993 correlation reflects fitting synthetic data generated from the same physics the model enforces.
 4. **No genes survive FDR correction**: All 17,453 differential dependency tests yield FDR > 0.43. The vulnerability hits are nominally significant (p < 0.05) but do not survive multiple testing correction. They should be treated as hypothesis-generating. The null baseline (38.3× enrichment, p < 0.0001) and pathway enrichment (mitotic/cell cycle) provide orthogonal support but do not address the multiple testing issue.
 5. **Marginal significance vs Random Forest**: The ecDNA-Former vs RF difference (0.105 AUROC) is not significant at α=0.05 (bootstrap p=0.075), likely due to only 10 ecDNA+ validation samples. The model does significantly outperform random (permutation p=0.0005).
 6. **Modules are independent**: Despite the "unified framework" framing, the three modules are trained independently on different data and have no shared representations or joint training. The integration is a post-hoc linear combination.
 7. **Small positive class**: 9.6% positive rate (113/1,176 training) limits statistical power, especially for per-lineage analysis where some lineages have <5 ecDNA+ samples.
 8. **Unlabeled-as-negative assumption**: 839/1,383 training samples have no ecDNA label (NaN in CytoCellDB) but are treated as ecDNA-negative. Some of these may be true positives, introducing label noise.
+9. **Lineage confounding**: Lineage LOOCV shows mean AUROC of ~0.66 across 14 lineages (vs 0.801 pooled), with high variance (0.445–0.939). The model partially relies on lineage-specific patterns rather than universal ecDNA features. Performance is poor on soft tissue, urinary tract, and skin lineages.
 
 ## Integration Demo
 
