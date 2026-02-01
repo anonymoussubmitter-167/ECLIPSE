@@ -2,10 +2,15 @@
 data/depmap/*.csv
 data/hic/*.mcool
 data/ecdna_labels/*.xlsx
+data/reference/
+data/ecdna_trajectories/
+data/gdsc/
+ecSimulator/
 *.h5
 *.hdf5
 *.pt
 *.pth
+*.mcool
 
 # Python
 __pycache__/

@@ -56,7 +56,7 @@ def save_fold_npz(data, indices, output_path):
     )
 
 
-def train_fold(fold_idx, data_dir, checkpoint_dir, epochs, patience, device):
+def train_fold(fold_idx, fold_data_dir, checkpoint_dir, epochs, patience, device):
     """Train one fold using the existing training pipeline."""
     from src.data import ECDNADataset, create_dataloader
     from src.models import ECDNAFormer
@@ -65,9 +65,9 @@ def train_fold(fold_idx, data_dir, checkpoint_dir, epochs, patience, device):
     fold_ckpt = Path(checkpoint_dir) / f"fold_{fold_idx}"
     fold_ckpt.mkdir(parents=True, exist_ok=True)
 
-    # Load fold data
-    train_dataset = ECDNADataset.from_data_dir(data_dir=data_dir, split="train")
-    val_dataset = ECDNADataset.from_data_dir(data_dir=data_dir, split="val")
+    # Load fold data from temp directory (not the original)
+    train_dataset = ECDNADataset.from_data_dir(data_dir=fold_data_dir, split="train")
+    val_dataset = ECDNADataset.from_data_dir(data_dir=fold_data_dir, split="val")
 
     train_loader = create_dataloader(train_dataset, batch_size=32, shuffle=True)
     val_loader = create_dataloader(val_dataset, batch_size=32, shuffle=False)
@@ -138,15 +138,18 @@ def main():
     skf = StratifiedKFold(n_splits=args.n_folds, shuffle=True, random_state=args.seed)
     folds = list(skf.split(np.zeros(n_samples), labels))
 
-    # Backup original NPZ files
-    train_npz = features_dir / "module1_features_train.npz"
-    val_npz = features_dir / "module1_features_val.npz"
-    train_backup = features_dir / "module1_features_train.npz.bak"
-    val_backup = features_dir / "module1_features_val.npz.bak"
-
-    import shutil
-    shutil.copy2(train_npz, train_backup)
-    shutil.copy2(val_npz, val_backup)
+    # Use a temp directory for fold data to avoid overwriting originals
+    import tempfile
+    import os
+    fold_data_dir = Path(tempfile.mkdtemp(prefix="eclipse_cv_"))
+    fold_features_dir = fold_data_dir / "features"
+    fold_features_dir.mkdir(parents=True, exist_ok=True)
+    # Symlink required subdirectories so ECDNADataset.from_data_dir works
+    for subdir in ["ecdna_labels", "cytocell_db", "depmap", "hic", "supplementary"]:
+        src = data_dir / subdir
+        if src.exists():
+            os.symlink(src.resolve(), fold_data_dir / subdir)
+    logger.info(f"Using temp directory for fold data: {fold_data_dir}")
 
     all_metrics = []
 
@@ -156,14 +159,14 @@ def main():
             logger.info(f"FOLD {fold_idx + 1}/{args.n_folds}")
             logger.info(f"{'='*60}")
 
-            # Save fold-specific NPZ files (overwrite train/val)
-            save_fold_npz(combined, train_idx, train_npz)
-            save_fold_npz(combined, val_idx, val_npz)
+            # Save fold-specific NPZ files to temp directory
+            save_fold_npz(combined, train_idx, fold_features_dir / "module1_features_train.npz")
+            save_fold_npz(combined, val_idx, fold_features_dir / "module1_features_val.npz")
 
             start = time.time()
             metrics = train_fold(
                 fold_idx=fold_idx,
-                data_dir=data_dir,
+                fold_data_dir=str(fold_data_dir),
                 checkpoint_dir=args.checkpoint_dir,
                 epochs=args.epochs,
                 patience=args.patience,
@@ -177,12 +180,10 @@ def main():
                         f"(epoch {metrics.get('best_epoch', '?')}, {elapsed:.0f}s)")
 
     finally:
-        # Restore original NPZ files
-        shutil.copy2(train_backup, train_npz)
-        shutil.copy2(val_backup, val_npz)
-        train_backup.unlink()
-        val_backup.unlink()
-        logger.info("Restored original train/val NPZ files")
+        # Clean up temp directory
+        import shutil
+        shutil.rmtree(fold_data_dir, ignore_errors=True)
+        logger.info("Cleaned up temp fold data directory")
 
     # Summary
     results_df = pd.DataFrame(all_metrics)

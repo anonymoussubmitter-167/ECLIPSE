@@ -63,7 +63,7 @@ def save_npz(data, indices, output_path):
     )
 
 
-def train_and_evaluate(lineage_name, data_dir, checkpoint_dir, epochs, patience, device):
+def train_and_evaluate(lineage_name, fold_data_dir, checkpoint_dir, epochs, patience, device):
     """Train on all lineages except one, evaluate on held-out lineage."""
     from src.data import ECDNADataset, create_dataloader
     from src.models import ECDNAFormer
@@ -72,8 +72,8 @@ def train_and_evaluate(lineage_name, data_dir, checkpoint_dir, epochs, patience,
     fold_ckpt = Path(checkpoint_dir) / f"lineage_{lineage_name}"
     fold_ckpt.mkdir(parents=True, exist_ok=True)
 
-    train_dataset = ECDNADataset.from_data_dir(data_dir=data_dir, split="train")
-    val_dataset = ECDNADataset.from_data_dir(data_dir=data_dir, split="val")
+    train_dataset = ECDNADataset.from_data_dir(data_dir=fold_data_dir, split="train")
+    val_dataset = ECDNADataset.from_data_dir(data_dir=fold_data_dir, split="val")
 
     n_val_pos = int(val_dataset.labels.sum()) if hasattr(val_dataset, 'labels') else -1
 
@@ -172,14 +172,18 @@ def main():
     logger.info(f"\nEligible lineages (>={args.min_samples} samples, >={args.min_positives} ecDNA+): "
                 f"{len(eligible)}")
 
-    # Backup original NPZ files
-    train_npz = features_dir / "module1_features_train.npz"
-    val_npz = features_dir / "module1_features_val.npz"
-    train_backup = features_dir / "module1_features_train.npz.bak"
-    val_backup = features_dir / "module1_features_val.npz.bak"
-
-    shutil.copy2(train_npz, train_backup)
-    shutil.copy2(val_npz, val_backup)
+    # Use a temp directory for fold data to avoid overwriting originals
+    import tempfile
+    import os
+    fold_data_dir = Path(tempfile.mkdtemp(prefix="eclipse_lineage_"))
+    fold_features_dir = fold_data_dir / "features"
+    fold_features_dir.mkdir(parents=True, exist_ok=True)
+    # Symlink required subdirectories so ECDNADataset.from_data_dir works
+    for subdir in ["ecdna_labels", "cytocell_db", "depmap", "hic", "supplementary"]:
+        src = data_dir / subdir
+        if src.exists():
+            os.symlink(src.resolve(), fold_data_dir / subdir)
+    logger.info(f"Using temp directory for fold data: {fold_data_dir}")
 
     all_results = []
 
@@ -198,13 +202,13 @@ def main():
             train_idx = np.where(train_mask)[0]
             val_idx = np.where(val_mask)[0]
 
-            # Save fold NPZ
-            save_npz(combined, train_idx, train_npz)
-            save_npz(combined, val_idx, val_npz)
+            # Save fold NPZ to temp directory
+            save_npz(combined, train_idx, fold_features_dir / "module1_features_train.npz")
+            save_npz(combined, val_idx, fold_features_dir / "module1_features_val.npz")
 
             start = time.time()
             result = train_and_evaluate(
-                lineage_name, data_dir, args.checkpoint_dir,
+                lineage_name, str(fold_data_dir), args.checkpoint_dir,
                 args.epochs, args.patience, device
             )
             result["time_sec"] = time.time() - start
@@ -214,12 +218,9 @@ def main():
             logger.info(f"  AUROC: {auroc:.3f}" if not np.isnan(auroc) else "  AUROC: N/A")
 
     finally:
-        # Restore original NPZ
-        shutil.copy2(train_backup, train_npz)
-        shutil.copy2(val_backup, val_npz)
-        train_backup.unlink()
-        val_backup.unlink()
-        logger.info("\nRestored original NPZ files")
+        # Clean up temp directory
+        shutil.rmtree(fold_data_dir, ignore_errors=True)
+        logger.info("\nCleaned up temp fold data directory")
 
     # Summary
     results_df = pd.DataFrame(all_results)

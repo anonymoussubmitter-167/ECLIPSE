@@ -285,7 +285,7 @@ Raw Features (112 total) → Padded/Encoded Inputs
         - Input: 32-dim CNV features
 ```
 
-Note: The 112 raw features (20 oncogene CNV + 11 CNV stats + 20 expression + 7 expression stats + 9 dosage + 40 Hi-C interactions + 5 Hi-C summary) are distributed across the 4 encoder inputs with zero-padding to fill the required dimensions.
+Note: The 112 raw features (20 oncogene CNV + 11 CNV stats + 20 expression + 7 expression stats + 9 dosage + 42 Hi-C interactions + 3 Hi-C summary) are distributed across the 4 encoder inputs with zero-padding to fill the required dimensions.
 
 **Training Configuration:**
 - Optimizer: AdamW (lr=1e-4, weight_decay=0.01)
@@ -319,8 +319,8 @@ Initial features from CytoCellDB contained data leakage - all AA_* features (amp
 | Oncogene Expression | 20 | expr_MYC, expr_EGFR, expr_CDK4 |
 | Expression Statistics | 7 | expr_mean, expr_max, oncogene_expr_max |
 | Dosage (CNV×Expr) | 9 | dosage_MYC, dosage_EGFR |
-| Hi-C × CNV Interactions | 40 | cnv_hic_MYC, cnv_hiclr_EGFR |
-| Hi-C Summary | 5 | hic_density_mean, hic_longrange_mean, oncogene_cnv_hic_weighted_max |
+| Hi-C × CNV Interactions | 42 | cnv_hic_MYC, cnv_hiclr_EGFR, oncogene_cnv_hic_weighted_max |
+| Hi-C Summary | 3 | hic_density_mean, hic_density_max, hic_longrange_mean |
 
 **Oncogenes Tracked (20):**
 MYC, MYCN, EGFR, ERBB2, CDK4, CDK6, MDM2, MDM4, CCND1, CCNE1, FGFR1, FGFR2, MET, PDGFRA, KIT, TERT, AR, BRAF, KRAS, PIK3CA
@@ -417,6 +417,43 @@ Note: AUPRC decreased from Gen 2 to Gen 3 (-28.9%) despite AUROC improving. This
 | 9 | cnv_frac_gt3 | 0.018 | CNV statistic |
 | 10 | cnv_MYC | 0.018 | Oncogene CNV |
 
+### Feature-Label Correlations (Point-Biserial)
+
+| Rank | Feature | Correlation | p-value | Category |
+|------|---------|-------------|---------|----------|
+| 1 | cnv_MYC | +0.274 | 2.9e-25 | Oncogene CNV |
+| 2 | cnv_hic_MYC | +0.274 | 2.9e-25 | Hi-C interaction |
+| 3 | dosage_MYC | +0.244 | 3.7e-20 | Dosage |
+| 4 | oncogene_cnv_max | +0.202 | 2.9e-14 | CNV statistic |
+| 5 | oncogene_cnv_hic_weighted_max | +0.201 | 4.5e-14 | Hi-C interaction |
+| 6 | cnv_max | +0.178 | 2.5e-11 | CNV statistic |
+| 7 | oncogene_cnv_mean | +0.163 | 9.8e-10 | CNV statistic |
+| 8 | n_oncogenes_amplified | +0.160 | 2.0e-9 | CNV statistic |
+| 9 | cnv_frac_gt5 | +0.136 | 4.2e-7 | CNV statistic |
+| 10 | expr_mean | +0.122 | 5.4e-6 | Expression |
+
+MYC copy number (cnv_MYC) is the single strongest predictor (r=0.274, p=2.9e-25), consistent with MYC being the most frequently ecDNA-amplified oncogene. CNV features dominate the top 10; expression features contribute modestly.
+
+**Hi-C Feature Redundancy (Important Caveat):**
+Feature intercorrelation analysis reveals that `cnv_hic_X` features have r≈1.000 with `cnv_X` for all 20 oncogenes. This is because the Hi-C features are computed as `cnv_X × hic_density_X`, where `hic_density_X` is a reference-genome constant (GM12878). Multiplying by a constant preserves rank order perfectly. Consequently, the 40 Hi-C interaction features are essentially redundant with the 20 CNV features. The AUROC improvement from Gen 2 (67 features, 0.736) to Gen 3 (112 features, 0.801) may reflect additional model capacity or the 5 Hi-C summary statistics, not genuinely new information from chromatin topology. A proper ablation study is needed to resolve this.
+
+Additional notable intercorrelations: `cnv_PDGFRA` ↔ `cnv_KIT` (r=0.838, same chromosome arm 4q12), `expr_mean` ↔ `expr_frac_high` (r=0.973), `cnv_X` ↔ `dosage_X` (r>0.83 for most oncogenes).
+
+### Label Noise Analysis
+
+839/1,383 training samples have no ecDNA label (NaN in CytoCellDB) but are treated as ecDNA-negative. Model predictions on these groups (evaluated on all data, including training samples):
+
+| Label Group | N | Mean Prediction | Predicted ecDNA+ (>0.35) |
+|------------|---|-----------------|--------------------------|
+| Y (ecDNA+) | 123 | 0.530 | — |
+| N (ecDNA-) | 382 | 0.161 | 36 (9.4%) |
+| P (Possible) | 39 | 0.239 | — |
+| Unlabeled (NaN) | 839 | 0.173 | 79 (9.4%) |
+
+The 79 unlabeled samples predicted ecDNA+ (9.4%) is close to the overall positive rate (8.9%), suggesting the unlabeled pool has a similar ecDNA prevalence to the labeled negative pool — i.e., treating unlabeled as negative is a reasonable approximation.
+
+The 36 N-labeled samples predicted positive (9.4% of N-labeled) may represent FISH false negatives, passage-dependent ecDNA loss, or model errors. AUROC on labeled-only samples (Y+N, n=505) is 0.946 vs 0.944 on all samples, indicating the unlabeled samples do not substantially degrade discrimination.
+
 ### Module 3: VulnCausal (Vulnerability Discovery)
 
 **Data:**
@@ -432,6 +469,8 @@ Note: AUPRC decreased from Gen 2 to Gen 3 (-28.9%) despite AUROC improving. This
 | Learned | Neural net + lineage correction | RPL23, URI1, DHX15, ribosomal proteins |
 
 **Results:**
+- Nominally significant genes (p < 0.05): 1,341
+- Genes surviving FDR correction (FDR < 0.05): **0** (no genes survive multiple testing correction across 17,453 tests)
 - Large effect genes (Cohen's d > 0.3): 153
 - Overlap in top 100 (both methods): 9 genes
 
@@ -451,42 +490,44 @@ Validation here means the gene has published evidence supporting a role in ecDNA
 
 | Gene | Effect | Category | Literature Support | PMID |
 |------|--------|----------|-------------------|------|
-| **CHK1** | N/A | DNA damage | VALIDATED - BBI-355 in Phase 1/2 trials | 39506153 |
+| **CHK1** | +0.013 (n.s.) | DNA damage | VALIDATED - BBI-355 in Phase 1/2 trials | 39506153 |
 | **CDK1** | -0.103 | Cell cycle | HIGH - CHK1 upstream, ecDNA vulnerability | 39506153 |
 | **KIF11** | -0.092 | Mitosis | HIGH - Spindle motor, BBI-940 target | 26941320 |
 | **NCAPD2** | -0.117 | Condensin | HIGH - Chromosome condensation | 35348268 |
-| **SGO1** | -0.15 | Segregation | HIGH - Shugoshin, centromeric cohesion | 30212568 |
+| **SGO1** | -0.145 | Segregation | HIGH - Shugoshin, centromeric cohesion | 30212568 |
 | **NDC80** | -0.092 | Mitosis | MODERATE - Kinetochore complex | 31065236 |
 | **ORC6** | -0.083 | Replication | HIGH - Origin licensing | 33436545 |
 | **MCM2** | -0.089 | Replication | HIGH - Replicative helicase | 17717065 |
 | **PSMD7** | -0.095 | Proteasome | HIGH - 26S subunit, p53 activation | 34234864 |
-| **RPL23** | +0.082 | Ribosome | HIGH - Co-amplified with ERBB2 | 29534686 |
-| **URI1** | -0.11 | Chaperone | HIGH - Prefoldin, CRC dependency | 27105489 |
-| **SNRPF** | -0.09 | Spliceosome | HIGH - MYC spliceosome addiction | 26331541 |
-| **DDX3X** | -0.12 | RNA helicase | HIGH - Wnt signaling, CRC target | 26311743 |
-| **BCL2L1** | -0.14 | Apoptosis | HIGH - BCL-XL, frequently amplified | 37271936 |
+| **RPL23** | +0.033 (n.s.) | Ribosome | Co-amplified with ERBB2 | 29534686 |
+| **URI1** | -0.082 | Chaperone | HIGH - Prefoldin, CRC dependency | 27105489 |
+| **SNRPF** | -0.084 | Spliceosome | HIGH - MYC spliceosome addiction | 26331541 |
+| **DDX3X** | -0.208 | RNA helicase | HIGH - Wnt signaling, CRC target | 26311743 |
+| **BCL2L1** | -0.149 | Apoptosis | HIGH - BCL-XL, frequently amplified | 37271936 |
+
+Note: CHEK1 (CHK1) shows a non-significant positive effect (+0.013, p=0.46), meaning our CRISPR screen analysis did NOT identify it as an ecDNA-specific vulnerability. It is included based on clinical validation (BBI-355 trials), highlighting the limitation of genome-wide CRISPR screens for detecting all vulnerabilities. RPL23 is similarly non-significant (+0.033, p=0.90). No genes survive FDR correction (best FDR: NCAPD2/SGO1/DDX3X at ~0.43), so all differential effects should be interpreted as hypothesis-generating, not statistically confirmed.
 
 **Effect Directionality and Biological Interpretation:**
 
-A negative CRISPR effect means ecDNA+ cells are *more dependent* on that gene (stronger growth defect when knocked out). Of 14 validated genes, 13/14 show negative effects — consistent with the hypothesis that ecDNA+ cells have heightened dependencies due to replication stress, mitotic burden, and transcriptional load.
+A negative CRISPR effect means ecDNA+ cells are *more dependent* on that gene (stronger growth defect when knocked out). Of 14 literature-referenced genes, 11 show nominally negative effects, 2 show non-significant positive effects (CHK1, RPL23), and 1 (DDX3X) shows the strongest effect at -0.208. None survive FDR correction.
 
 | Gene | Effect | Expected Direction | Matches? | Biological Rationale |
 |------|--------|-------------------|----------|---------------------|
 | CDK1 | -0.103 | Negative | Yes | ecDNA replication creates transcription-replication conflicts requiring checkpoint activity |
 | KIF11 | -0.092 | Negative | Yes | Acentric ecDNA lacks centromeres; cells rely on spindle motors for missegregation tolerance |
 | NCAPD2 | -0.117 | Negative | Yes | Condensin II required to resolve ecDNA catenation during mitosis |
-| SGO1 | -0.15 | Negative | Yes | Shugoshin protects cohesion; ecDNA cells have elevated segregation errors |
+| SGO1 | -0.145 | Negative | Yes | Shugoshin protects cohesion; ecDNA cells have elevated segregation errors |
 | NDC80 | -0.092 | Negative | Yes | Kinetochore component; ecDNA cells tolerate aneuploidy via enhanced mitotic checkpoints |
 | ORC6 | -0.083 | Negative | Yes | ecDNA has autonomous replication origins; high ORC dependency |
 | MCM2 | -0.089 | Negative | Yes | Replicative helicase; ecDNA imposes extra replication burden |
 | PSMD7 | -0.095 | Negative | Yes | Proteasome handles elevated protein turnover from high-CN transcription |
-| URI1 | -0.11 | Negative | Yes | Prefoldin chaperone for protein folding under translational stress |
-| SNRPF | -0.09 | Negative | Yes | Spliceosome component; MYC-amplified ecDNA cells have spliceosome addiction |
-| DDX3X | -0.12 | Negative | Yes | RNA helicase in Wnt pathway; ecDNA-driven transcriptional programs depend on it |
-| BCL2L1 | -0.14 | Negative | Yes | Anti-apoptotic BCL-XL; ecDNA+ cells have elevated apoptotic priming |
-| RPL23 | +0.082 | Positive | Yes | RPL23 is co-amplified with ERBB2 on ecDNA — knockout removes the amplified gene itself, so ecDNA+ cells are *less* dependent (already overexpressing) |
+| URI1 | -0.082 | Negative | Yes | Prefoldin chaperone for protein folding under translational stress |
+| SNRPF | -0.084 | Negative | Yes | Spliceosome component; MYC-amplified ecDNA cells have spliceosome addiction |
+| DDX3X | -0.208 | Negative | Yes | RNA helicase in Wnt pathway; ecDNA-driven transcriptional programs depend on it |
+| BCL2L1 | -0.149 | Negative | Yes | Anti-apoptotic BCL-XL; ecDNA+ cells have elevated apoptotic priming |
+| RPL23 | +0.033 (n.s.) | Positive | — | RPL23 effect is non-significant (p=0.90); may be co-amplified with ERBB2 but differential dependency is not supported |
 
-The one positive-effect gene (RPL23) is explained by co-amplification: RPL23 sits in the ERBB2 amplicon that is frequently carried on ecDNA, so ecDNA+ cells already overexpress it and tolerate its loss better than ecDNA- cells.
+Two genes show positive effects: CHEK1 (+0.013) and RPL23 (+0.033), but both are non-significant (p=0.46 and p=0.90 respectively). The RPL23 co-amplification hypothesis (ERBB2 amplicon on ecDNA) is not supported by the data.
 
 **Biological Themes:**
 
@@ -657,6 +698,71 @@ This motivates the need for ecDNA-specific drug design (as Boundless Bio is doin
 - `data/validation/vulncausal_gdsc_real_validation.csv`
 - `scripts/validate_vulncausal_gdsc_real.py`
 
+### Statistical Validation
+
+#### 5-Fold Stratified Cross-Validation (Module 1)
+
+To address the single-split limitation, we trained ecDNA-Former from scratch on 5 stratified folds of the combined 1,383-sample dataset:
+
+| Fold | Best Epoch | AUROC | AUPRC | F1 | MCC | Recall |
+|------|-----------|-------|-------|-----|-----|--------|
+| 0 | 60 | 0.746 | 0.357 | 0.361 | 0.290 | 44.0% |
+| 1 | 38 | 0.710 | 0.226 | 0.255 | 0.198 | 76.0% |
+| 2 | 4 | 0.703 | 0.254 | 0.202 | 0.126 | 88.0% |
+| 3 | 110 | 0.795 | 0.379 | 0.238 | 0.209 | 91.7% |
+| 4 | 33 | 0.692 | 0.262 | 0.293 | 0.218 | 45.8% |
+| **Mean ± SD** | | **0.729 ± 0.042** | **0.296 ± 0.065** | **0.270 ± 0.060** | **0.208 ± 0.058** | **69.1%** |
+
+The cross-validated AUROC (0.729 ± 0.042) is lower than the single-split AUROC (0.801), indicating some overfitting to the original validation set. The wide variance across folds reflects the small positive class (123 ecDNA+ total, ~25 per fold).
+
+#### Bootstrap Significance Tests (Module 1)
+
+10,000-iteration bootstrap confidence intervals and comparison tests:
+
+| Model | AUROC | 95% CI | vs Random p |
+|-------|-------|--------|-------------|
+| ecDNA-Former | 0.801 | [0.669, 0.923] | 0.0005 |
+| RandomForest | 0.695 | [0.498, 0.874] | — |
+| **Difference** | **0.105** | [-0.033, 0.265] | **p = 0.075** |
+
+The ecDNA-Former significantly outperforms random (permutation p = 0.0005) but the advantage over Random Forest is not significant at α = 0.05 (p = 0.075), likely due to only 10 ecDNA+ validation samples.
+
+#### Null Baseline (Module 3: Vulnerability Discovery)
+
+To test whether the 14/47 literature-validated genes could arise by chance, we sampled 100,000 random gene sets of size 47 from 17,453 genes and counted overlap with validation categories:
+
+| Metric | Observed | Null Mean | P-value | Enrichment |
+|--------|----------|-----------|---------|------------|
+| Validated genes | 14/47 (29.8%) | 0.4/47 (0.8%) | < 0.0001 | **38.3×** |
+| Wilson 95% CI | [18.7%, 44.0%] | — | — | — |
+
+The vulnerability hits are highly non-random (p < 0.0001, 38.3× enrichment over chance).
+
+#### Pathway Enrichment (Module 3)
+
+Hypergeometric tests for GO/KEGG pathway enrichment among top vulnerability candidates (Benjamini-Hochberg corrected):
+
+**Top 47 candidates:**
+
+| Pathway | Overlap | Enrichment | Adj. p-value |
+|---------|---------|------------|--------------|
+| GO:0007067 Mitotic nuclear division | 8 (KIF11, KIF18A, KIF23, NCAPD2, NCAPG, NDC80, SGO1, TPX2) | 92.8× | 1.5e-13 |
+| KEGG:hsa04110 Cell cycle | 5 (CDK1, CDK2, MCM2, SGO1, TP53) | 43.2× | 5.1e-7 |
+| GO:0007049 Cell cycle | 3 (CDK1, CDK2, SGO1) | 31.8× | 3.8e-4 |
+| GO:0010941 Regulation of cell death | 2 (BCL2L1, TP53) | 32.3× | 4.3e-3 |
+
+**Top 100 candidates:**
+
+| Pathway | Overlap | Enrichment | Adj. p-value |
+|---------|---------|------------|--------------|
+| GO:0007067 Mitotic nuclear division | 9 | 49.1× | 1.2e-12 |
+| KEGG:hsa04110 Cell cycle | 7 | 28.4× | 2.2e-8 |
+| GO:0006260 DNA replication | 3 (MCM2, MCM3, ORC6) | 15.9× | 2.2e-3 |
+| GO:0000398 mRNA splicing | 2 (SNRPD1, SNRPF) | 12.9× | 1.5e-2 |
+| GO:0000502 Proteasome complex | 2 (PSMB5, PSMD7) | 11.6× | 1.6e-2 |
+
+The dominant enrichment for mitotic nuclear division and cell cycle pathways is consistent with ecDNA's known biology — acentric elements that impose segregation stress during mitosis.
+
 ## Target Performance
 
 | Task | Metric | Target | Result | Status |
@@ -672,18 +778,19 @@ This motivates the need for ecDNA-specific drug design (as Boundless Bio is doin
 **Caveats on target performance:**
 - Trajectory MSE/correlation are on synthetic held-out data, not real longitudinal measurements
 - The 14 "validated" vulnerability genes are literature cross-references, not prospective experimental validations
-- All Module 1 metrics are from a single 85/15 random split; cross-validation would give more robust estimates
-- Only 10 ecDNA+ samples in the validation set — metrics have wide confidence intervals
+- All Module 1 metrics are from a single 85/15 random split; 5-fold CV gives 0.729 ± 0.042 (see Statistical Validation)
+- Small ecDNA+ validation set — metrics have wide confidence intervals (95% CI: [0.669, 0.923])
 
 ## Known Limitations
 
-1. **Single train/val split**: Module 1 uses a single 85/15 stratified split with only 10 ecDNA+ validation samples. Bootstrap or k-fold cross-validation is needed for robust performance estimates.
-2. **No ablation experiments**: Feature group ablations (removing Hi-C, CNV, expression individually) have not been run. The relative contribution of each feature group is not empirically established.
+1. **Single train/val split**: Module 1 headline metrics (AUROC 0.801) are from a single 85/15 split with only 10 ecDNA+ validation samples. 5-fold CV gives a more conservative estimate of 0.729 ± 0.042 (see Statistical Validation).
+2. **Hi-C feature redundancy**: Feature intercorrelation analysis shows cnv_hic_X features are perfectly correlated (r≈1.0) with cnv_X because Hi-C densities are reference-genome constants. The 40 "Hi-C interaction" features are redundant with CNV features. The Gen 2→Gen 3 AUROC improvement (0.736→0.801) may reflect additional model capacity, not new information. Feature ablation is needed to quantify actual Hi-C contribution.
 3. **CircularODE trained on synthetic data**: All trajectory training data is simulated. The model has not been validated on real longitudinal ecDNA copy number measurements. The 0.993 correlation reflects fitting synthetic data generated from the same physics the model enforces.
-4. **Vulnerability validation is post-hoc**: Literature cross-referencing is susceptible to confirmation bias. Many of the 14 genes (CDK1, KIF11, etc.) are general cancer dependencies that would appear in any CRISPR screen analysis, not just ecDNA-specific ones. A null baseline (random gene set validation rate) has not been computed.
-5. **No statistical significance tests**: Comparisons between ecDNA-Former and baselines lack p-values or confidence intervals.
+4. **No genes survive FDR correction**: All 17,453 differential dependency tests yield FDR > 0.43. The vulnerability hits are nominally significant (p < 0.05) but do not survive multiple testing correction. They should be treated as hypothesis-generating. The null baseline (38.3× enrichment, p < 0.0001) and pathway enrichment (mitotic/cell cycle) provide orthogonal support but do not address the multiple testing issue.
+5. **Marginal significance vs Random Forest**: The ecDNA-Former vs RF difference (0.105 AUROC) is not significant at α=0.05 (bootstrap p=0.075), likely due to only 10 ecDNA+ validation samples. The model does significantly outperform random (permutation p=0.0005).
 6. **Modules are independent**: Despite the "unified framework" framing, the three modules are trained independently on different data and have no shared representations or joint training. The integration is a post-hoc linear combination.
 7. **Small positive class**: 9.6% positive rate (113/1,176 training) limits statistical power, especially for per-lineage analysis where some lineages have <5 ecDNA+ samples.
+8. **Unlabeled-as-negative assumption**: 839/1,383 training samples have no ecDNA label (NaN in CytoCellDB) but are treated as ecDNA-negative. Some of these may be true positives, introducing label noise.
 
 ## Integration Demo
 

@@ -292,12 +292,12 @@ def main():
     # Load Hi-C features (reference-based)
     hic_features = load_hic_features(data_dir)
 
-    # Find common samples
-    common_samples = list(
+    # Find common samples (sorted for deterministic splits across runs)
+    common_samples = sorted(list(
         set(labels.index) &
         set(cnv.index) &
         set(expr.index)
-    )
+    ))
     logger.info(f"\nCommon samples with all data: {len(common_samples)}")
 
     # Extract features

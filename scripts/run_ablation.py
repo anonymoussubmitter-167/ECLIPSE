@@ -89,7 +89,7 @@ def zero_feature_group(npz_path, feature_names, group_fn, output_path):
     return n_zeroed
 
 
-def train_ablation(ablation_name, data_dir, checkpoint_dir, epochs, patience, device):
+def train_ablation(ablation_name, fold_data_dir, checkpoint_dir, epochs, patience, device):
     """Train one ablation variant."""
     from src.data import ECDNADataset, create_dataloader
     from src.models import ECDNAFormer
@@ -98,8 +98,8 @@ def train_ablation(ablation_name, data_dir, checkpoint_dir, epochs, patience, de
     abl_ckpt = Path(checkpoint_dir) / f"ablation_{ablation_name}"
     abl_ckpt.mkdir(parents=True, exist_ok=True)
 
-    train_dataset = ECDNADataset.from_data_dir(data_dir=data_dir, split="train")
-    val_dataset = ECDNADataset.from_data_dir(data_dir=data_dir, split="val")
+    train_dataset = ECDNADataset.from_data_dir(data_dir=fold_data_dir, split="train")
+    val_dataset = ECDNADataset.from_data_dir(data_dir=fold_data_dir, split="val")
 
     train_loader = create_dataloader(train_dataset, batch_size=32, shuffle=True)
     val_loader = create_dataloader(val_dataset, batch_size=32, shuffle=False)
@@ -159,14 +159,27 @@ def main():
         count = sum(1 for name in feature_names if group_fn(name))
         logger.info(f"  {group_name}: {count} features")
 
-    # Backup original NPZ files
+    # Use a temp directory to avoid overwriting originals
+    import tempfile
+    import os
+    tmp_data_dir = Path(tempfile.mkdtemp(prefix="eclipse_ablation_"))
+    tmp_features_dir = tmp_data_dir / "features"
+    tmp_features_dir.mkdir(parents=True, exist_ok=True)
+    # Symlink required subdirectories so ECDNADataset.from_data_dir works
+    for subdir in ["ecdna_labels", "cytocell_db", "depmap", "hic", "supplementary"]:
+        src = data_dir / subdir
+        if src.exists():
+            os.symlink(src.resolve(), tmp_data_dir / subdir)
+    logger.info(f"Using temp directory for ablation data: {tmp_data_dir}")
+
+    # Copy original NPZ files to temp directory
     train_npz = features_dir / "module1_features_train.npz"
     val_npz = features_dir / "module1_features_val.npz"
-    train_backup = features_dir / "module1_features_train.npz.bak"
-    val_backup = features_dir / "module1_features_val.npz.bak"
+    tmp_train_npz = tmp_features_dir / "module1_features_train.npz"
+    tmp_val_npz = tmp_features_dir / "module1_features_val.npz"
 
-    shutil.copy2(train_npz, train_backup)
-    shutil.copy2(val_npz, val_backup)
+    shutil.copy2(train_npz, tmp_train_npz)
+    shutil.copy2(val_npz, tmp_val_npz)
 
     all_results = []
 
@@ -176,7 +189,7 @@ def main():
         logger.info("BASELINE (full features)")
         logger.info(f"{'='*60}")
         start = time.time()
-        baseline = train_ablation("Full", data_dir, args.checkpoint_dir, args.epochs, args.patience, device)
+        baseline = train_ablation("Full", str(tmp_data_dir), args.checkpoint_dir, args.epochs, args.patience, device)
         baseline["time_sec"] = time.time() - start
         baseline["n_zeroed"] = 0
         all_results.append(baseline)
@@ -188,13 +201,13 @@ def main():
             logger.info(f"ABLATION: -{group_name}")
             logger.info(f"{'='*60}")
 
-            # Create ablated NPZ files
-            n_train = zero_feature_group(train_backup, feature_names, group_fn, train_npz)
-            n_val = zero_feature_group(val_backup, feature_names, group_fn, val_npz)
+            # Create ablated NPZ files from the original copies
+            n_train = zero_feature_group(str(train_npz), feature_names, group_fn, str(tmp_train_npz))
+            n_val = zero_feature_group(str(val_npz), feature_names, group_fn, str(tmp_val_npz))
 
             start = time.time()
             result = train_ablation(
-                f"minus_{group_name}", data_dir, args.checkpoint_dir,
+                f"minus_{group_name}", str(tmp_data_dir), args.checkpoint_dir,
                 args.epochs, args.patience, device
             )
             result["time_sec"] = time.time() - start
@@ -205,12 +218,9 @@ def main():
             logger.info(f"  -{group_name} AUROC: {result['auroc']:.3f} (Δ = {delta:+.3f})")
 
     finally:
-        # Restore originals
-        shutil.copy2(train_backup, train_npz)
-        shutil.copy2(val_backup, val_npz)
-        train_backup.unlink()
-        val_backup.unlink()
-        logger.info("Restored original NPZ files")
+        # Clean up temp directory
+        shutil.rmtree(tmp_data_dir, ignore_errors=True)
+        logger.info("Cleaned up temp ablation data directory")
 
     # Summary
     results_df = pd.DataFrame(all_results)

@@ -238,7 +238,7 @@ class BaseTrainer(ABC):
 
             # Forward pass with mixed precision
             if self.mixed_precision:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast('cuda'):
                     losses = self.compute_loss(batch)
                     loss = losses["total_loss"] / self.gradient_accumulation_steps
             else:
