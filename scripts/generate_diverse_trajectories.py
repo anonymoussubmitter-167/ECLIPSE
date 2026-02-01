@@ -16,9 +16,11 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 # Configuration
 NUM_TRAJECTORIES = 500
 MAX_WORKERS = 4
-REF_FASTA = Path("/home/bcheng/eclipse/data/reference/hg38.fa")
-ECSIMULATOR_DIR = Path("/home/bcheng/eclipse/ecSimulator")
-OUTPUT_DIR = Path("/home/bcheng/eclipse/data/ecdna_trajectories_v2")
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = SCRIPT_DIR.parent
+REF_FASTA = PROJECT_DIR / "data" / "reference" / "hg38.fa"
+ECSIMULATOR_DIR = PROJECT_DIR / "ecSimulator"
+OUTPUT_DIR = PROJECT_DIR / "data" / "ecdna_trajectories_v2"
 CONFIG_DIR = OUTPUT_DIR / "configs"
 
 # Variation parameters for diverse trajectories

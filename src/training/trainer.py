@@ -101,7 +101,7 @@ class BaseTrainer(ABC):
         self.scheduler = scheduler
 
         # Mixed precision scaler
-        self.scaler = torch.cuda.amp.GradScaler() if mixed_precision else None
+        self.scaler = torch.amp.GradScaler('cuda') if mixed_precision else None
 
         # Training state
         self.global_step = 0

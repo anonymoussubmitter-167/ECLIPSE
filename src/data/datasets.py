@@ -15,7 +15,10 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
-from torch_geometric.data import Data as GraphData
+try:
+    from torch_geometric.data import Data as GraphData
+except ImportError:
+    GraphData = None
 
 logger = logging.getLogger(__name__)
 

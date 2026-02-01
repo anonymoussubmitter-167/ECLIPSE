@@ -253,8 +253,8 @@ eclipse/
 **Final Dataset — Module 1 (after intersection of CytoCellDB × DepMap × 4DN):**
 | Split | Samples | ecDNA+ | ecDNA- | Positive Rate |
 |-------|---------|--------|--------|---------------|
-| Train | 1,176 | 113 | 1,063 | 9.6% |
-| Val | 207 | 10 | 197 | 4.8% |
+| Train | 1,176 | 106 | 1,070 | 9.0% |
+| Val | 207 | 17 | 190 | 8.2% |
 | **Total** | **1,383** | **123** | **1,260** | **8.9%** |
 
 Note: Each module uses a different sample intersection. Module 1 uses 1,383 cell lines (CytoCellDB ∩ DepMap CNV ∩ DepMap expression ∩ 4DN Hi-C). Module 2 uses 500 synthetic trajectories. Module 3 uses 1,062 cell lines (CytoCellDB ∩ DepMap CRISPR: 92 ecDNA+, 970 ecDNA-). The modules are trained independently.
@@ -288,8 +288,7 @@ Raw Features (112 total) → Padded/Encoded Inputs
 Note: The 112 raw features (20 oncogene CNV + 11 CNV stats + 20 expression + 7 expression stats + 9 dosage + 42 Hi-C interactions + 3 Hi-C summary) are distributed across the 4 encoder inputs with zero-padding to fill the required dimensions.
 
 **Training Configuration:**
-- Optimizer: AdamW (lr=1e-4, weight_decay=0.01)
-- Scheduler: CosineAnnealing with warmup (5%)
+- Optimizer: AdamW (lr=1e-5, weight_decay=0.01)
 - Loss: Focal Loss (α=0.75, γ=2.0) for class imbalance
 - Batch size: 32
 - Early stopping: patience=30 on validation loss
@@ -351,7 +350,7 @@ MYC, MYCN, EGFR, ERBB2, CDK4, CDK6, MDM2, MDM4, CCND1, CCNE1, FGFR1, FGFR2, MET,
 - Features: 112 (Gen 2 + Hi-C interaction features)
 - Hi-C source: GM12878 reference (4D Nucleome)
 - New features: CNV × Hi-C density, CNV × long-range contacts
-- Training: 200 epochs, 1,176 train samples (113 ecDNA+), 207 val samples (10 ecDNA+)
+- Training: 200 epochs, 1,176 train samples (106 ecDNA+), 207 val samples (17 ecDNA+)
 - Result: **AUROC 0.801, Recall 50%, F1 0.278**
 - Status: ✓ Current best
 
@@ -615,7 +614,7 @@ Input Sequence [batch, 20, 2] (CN + time)
 
 #### Module 1: ecDNA-Former
 
-**Validation set performance (n=207, 10 ecDNA+):**
+**Validation set performance (n=207, 17 ecDNA+):**
 
 | Metric | Value |
 |--------|-------|
@@ -641,7 +640,7 @@ This concordance rate is expected given the methodological differences:
 - Both predictions are low because the synthetic feature vectors for these isogenic pairs lack the full feature context available in real DepMap/Hi-C data. This test is limited by the manual feature construction.
 
 **Areas for improvement:**
-1. Larger training cohorts (current: 1,176 train, 113 ecDNA+)
+1. Larger training cohorts (current: 1,176 train, 106 ecDNA+)
 2. Additional feature modalities (e.g., WGS structural variants)
 3. Cross-validation for more robust performance estimation
 
@@ -725,7 +724,7 @@ The cross-validated AUROC (0.729 ± 0.042) is lower than the single-split AUROC 
 | RandomForest | 0.695 | [0.498, 0.874] | — |
 | **Difference** | **0.105** | [-0.033, 0.265] | **p = 0.075** |
 
-The ecDNA-Former significantly outperforms random (permutation p = 0.0005) but the advantage over Random Forest is not significant at α = 0.05 (p = 0.075), likely due to only 10 ecDNA+ validation samples.
+The ecDNA-Former significantly outperforms random (permutation p = 0.0005) but the advantage over Random Forest is not significant at α = 0.05 (p = 0.075), likely due to only 17 ecDNA+ validation samples.
 
 #### Feature Ablation Study (Module 1)
 
@@ -824,13 +823,13 @@ The dominant enrichment for mitotic nuclear division and cell cycle pathways is 
 
 ## Known Limitations
 
-1. **Single train/val split**: Module 1 headline metrics (AUROC 0.801) are from a single 85/15 split with only 10 ecDNA+ validation samples. 5-fold CV gives a more conservative estimate of 0.729 ± 0.042 (see Statistical Validation).
+1. **Single train/val split**: Module 1 headline metrics (AUROC 0.801) are from a single 85/15 split with only 17 ecDNA+ validation samples. 5-fold CV gives a more conservative estimate of 0.729 ± 0.042 (see Statistical Validation).
 2. **Hi-C features provide no value**: Feature ablation confirms that removing all 45 Hi-C features *improves* AUROC (0.787→0.796). Intercorrelation analysis shows cnv_hic_X features are perfectly correlated (r≈1.0) with cnv_X because Hi-C densities are reference-genome constants. The Gen 2→Gen 3 AUROC improvement (0.736→0.801) reflects additional model capacity or random variation, not new information from chromatin topology.
 3. **CircularODE trained on synthetic data**: All trajectory training data is simulated. The model has not been validated on real longitudinal ecDNA copy number measurements. The 0.993 correlation reflects fitting synthetic data generated from the same physics the model enforces.
 4. **No genes survive FDR correction**: All 17,453 differential dependency tests yield FDR > 0.43. The vulnerability hits are nominally significant (p < 0.05) but do not survive multiple testing correction. They should be treated as hypothesis-generating. The null baseline (38.3× enrichment, p < 0.0001) and pathway enrichment (mitotic/cell cycle) provide orthogonal support but do not address the multiple testing issue.
-5. **Marginal significance vs Random Forest**: The ecDNA-Former vs RF difference (0.105 AUROC) is not significant at α=0.05 (bootstrap p=0.075), likely due to only 10 ecDNA+ validation samples. The model does significantly outperform random (permutation p=0.0005).
+5. **Marginal significance vs Random Forest**: The ecDNA-Former vs RF difference (0.105 AUROC) is not significant at α=0.05 (bootstrap p=0.075), likely due to only 17 ecDNA+ validation samples. The model does significantly outperform random (permutation p=0.0005).
 6. **Modules are independent**: Despite the "unified framework" framing, the three modules are trained independently on different data and have no shared representations or joint training. The integration is a post-hoc linear combination.
-7. **Small positive class**: 9.6% positive rate (113/1,176 training) limits statistical power, especially for per-lineage analysis where some lineages have <5 ecDNA+ samples.
+7. **Small positive class**: 9.0% positive rate (106/1,176 training) limits statistical power, especially for per-lineage analysis where some lineages have <5 ecDNA+ samples.
 8. **Unlabeled-as-negative assumption**: 839/1,383 training samples have no ecDNA label (NaN in CytoCellDB) but are treated as ecDNA-negative. Some of these may be true positives, introducing label noise.
 9. **Lineage confounding**: Lineage LOOCV shows mean AUROC of ~0.66 across 14 lineages (vs 0.801 pooled), with high variance (0.445–0.939). The model partially relies on lineage-specific patterns rather than universal ecDNA features. Performance is poor on soft tissue, urinary tract, and skin lineages.
 

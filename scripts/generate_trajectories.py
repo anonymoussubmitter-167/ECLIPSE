@@ -14,9 +14,11 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 # Configuration
 NUM_TRAJECTORIES = 500
 MAX_WORKERS = 4  # Parallel processes
-REF_FASTA = Path("/home/bcheng/eclipse/data/reference/hg38.fa")
-ECSIMULATOR_DIR = Path("/home/bcheng/eclipse/ecSimulator")
-OUTPUT_DIR = Path("/home/bcheng/eclipse/data/ecdna_trajectories")
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = SCRIPT_DIR.parent
+REF_FASTA = PROJECT_DIR / "data" / "reference" / "hg38.fa"
+ECSIMULATOR_DIR = PROJECT_DIR / "ecSimulator"
+OUTPUT_DIR = PROJECT_DIR / "data" / "ecdna_trajectories"
 
 def generate_single_trajectory(traj_id: int) -> dict:
     """Generate a single ecDNA trajectory."""
