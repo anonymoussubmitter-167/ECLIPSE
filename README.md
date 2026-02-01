@@ -250,35 +250,42 @@ eclipse/
 | 4D Nucleome | Hi-C contact maps (GM12878) | 50kb resolution | Chromatin topology |
 | 4D Nucleome | Hi-C contact maps (K562) | 1.8GB | Alternative reference |
 
-**Final Dataset (after intersection):**
+**Final Dataset — Module 1 (after intersection of CytoCellDB × DepMap × 4DN):**
 | Split | Samples | ecDNA+ | ecDNA- | Positive Rate |
 |-------|---------|--------|--------|---------------|
 | Train | 1,176 | 113 | 1,063 | 9.6% |
 | Val | 207 | 10 | 197 | 4.8% |
 | **Total** | **1,383** | **123** | **1,260** | **8.9%** |
 
+Note: Each module uses a different sample intersection. Module 1 uses 1,383 cell lines (CytoCellDB ∩ DepMap CNV ∩ DepMap expression ∩ 4DN Hi-C). Module 2 uses 500 synthetic trajectories. Module 3 uses 1,062 cell lines (CytoCellDB ∩ DepMap CRISPR: 92 ecDNA+, 970 ecDNA-). The modules are trained independently.
+
 ### Model Architecture
 
 **ecDNA-Former:**
+
+112 raw features are split into 4 groups and zero-padded to encoder input dimensions:
+
 ```
-Input Features (112 total)
+Raw Features (112 total) → Padded/Encoded Inputs
     │
     ├── Sequence Encoder (CNN) ──────────────────┐
-    │   - Input: 256-dim padded features         │
+    │   - Input: 256-dim (zero-padded)           │
     │   - Output: 256-dim embeddings             │
     │                                            │
     ├── Topology Encoder ────────────────────────┼── Cross-Modal Fusion
     │   - 4-level hierarchical transformer       │   (Bottleneck, 16 tokens)
-    │   - Input: 256-dim topology features       │         │
+    │   - Input: 256-dim (zero-padded)           │         │
     │   - Output: 256-dim embeddings             │         │
     │                                            │         ▼
     ├── Fragile Site Encoder ────────────────────┘   Formation Head
-    │   - Input: 64-dim fragile site features            │
+    │   - Input: 64-dim (zero-padded)                    │
     │   - Output: 64-dim embeddings                      ▼
     │                                              ecDNA Probability
     └── Copy Number Encoder                        [0, 1]
         - Input: 32-dim CNV features
 ```
+
+Note: The 112 raw features (20 oncogene CNV + 11 CNV stats + 20 expression + 7 expression stats + 9 dosage + 40 Hi-C interactions + 5 Hi-C summary) are distributed across the 4 encoder inputs with zero-padding to fill the required dimensions.
 
 **Training Configuration:**
 - Optimizer: AdamW (lr=1e-4, weight_decay=0.01)
@@ -307,16 +314,16 @@ Initial features from CytoCellDB contained data leakage - all AA_* features (amp
 
 | Category | Count | Examples |
 |----------|-------|----------|
-| Oncogene CNV | 21 | cnv_MYC, cnv_EGFR, cnv_CDK4, cnv_MDM2 |
-| CNV Statistics | 9 | cnv_max, cnv_mean, cnv_std, cnv_frac_gt3 |
-| Oncogene Expression | 21 | expr_MYC, expr_EGFR, expr_CDK4 |
+| Oncogene CNV | 20 | cnv_MYC, cnv_EGFR, cnv_CDK4, cnv_MDM2 |
+| CNV Statistics | 11 | cnv_max, cnv_mean, cnv_std, cnv_frac_gt3, oncogene_cnv_max, n_oncogenes_amplified |
+| Oncogene Expression | 20 | expr_MYC, expr_EGFR, expr_CDK4 |
 | Expression Statistics | 7 | expr_mean, expr_max, oncogene_expr_max |
 | Dosage (CNV×Expr) | 9 | dosage_MYC, dosage_EGFR |
 | Hi-C × CNV Interactions | 40 | cnv_hic_MYC, cnv_hiclr_EGFR |
-| Hi-C Summary | 5 | hic_density_mean, hic_longrange_mean |
+| Hi-C Summary | 5 | hic_density_mean, hic_longrange_mean, oncogene_cnv_hic_weighted_max |
 
-**Oncogenes Tracked (21):**
-MYC, MYCN, MYCL1, EGFR, ERBB2, CDK4, CDK6, MDM2, MDM4, CCND1, CCNE1, FGFR1, FGFR2, MET, PDGFRA, KIT, TERT, AR, BRAF, KRAS, PIK3CA
+**Oncogenes Tracked (20):**
+MYC, MYCN, EGFR, ERBB2, CDK4, CDK6, MDM2, MDM4, CCND1, CCNE1, FGFR1, FGFR2, MET, PDGFRA, KIT, TERT, AR, BRAF, KRAS, PIK3CA
 
 ### Model Evolution
 
@@ -384,6 +391,8 @@ MYC, MYCN, MYCL1, EGFR, ERBB2, CDK4, CDK6, MDM2, MDM4, CCND1, CCNE1, FGFR1, FGFR
 | Balanced Accuracy | 63.3% | 69.7% | +10.1% |
 | MCC | 0.170 | 0.255 | +50.0% |
 
+Note: AUPRC decreased from Gen 2 to Gen 3 (-28.9%) despite AUROC improving. This is because Gen 2 and Gen 3 use different train/val splits (Gen 2 used 70/15/15, Gen 3 uses 85/15), so the validation sets differ in size, composition, and positive rate. AUPRC is sensitive to the base rate of positives in the evaluation set. These metrics are not directly comparable across generations.
+
 ### Baseline Comparisons
 
 | Model | Features | AUROC | F1 | Notes |
@@ -436,7 +445,9 @@ MYC, MYCN, MYCL1, EGFR, ERBB2, CDK4, CDK6, MDM2, MDM4, CCND1, CCNE1, FGFR1, FGFR
 | PSMD7 | Proteasome | Protein degradation |
 | SNRPF, URI1 | RNA processing | Splicing/transcription |
 
-**Literature Validation (14 genes validated):**
+**Literature Cross-Reference (14 genes with published support):**
+
+Validation here means the gene has published evidence supporting a role in ecDNA biology or related cancer dependency — it is post-hoc literature cross-referencing, not prospective experimental validation. Only CHK1 has direct ecDNA-specific experimental validation (Tang et al. 2024). The remaining genes have general cancer biology support that is consistent with but not specific to ecDNA vulnerability. No null baseline (random gene set validation rate) has been computed.
 
 | Gene | Effect | Category | Literature Support | PMID |
 |------|--------|----------|-------------------|------|
@@ -508,8 +519,9 @@ The one positive-effect gene (RPL23) is explained by co-amplification: RPL23 sit
 
 ### Module 2: CircularODE (Dynamics Modeling)
 
-**Data:**
-- Trajectories: 500 synthetic ecDNA trajectories from ecSimulator
+**Data (entirely synthetic):**
+- Trajectories: 500 synthetic ecDNA trajectories generated with stochastic simulation (binomial segregation + selection)
+- No real longitudinal copy number data is used for training — all trajectories are simulated
 - Time points: 50 per trajectory (100 generations)
 - Treatments: 4 types (none, targeted, chemo, maintenance)
 
@@ -597,7 +609,9 @@ This concordance rate is expected given the methodological differences:
 
 #### Module 2: CircularODE vs Lange et al. 2022
 
-Validated against published CN trajectories from [Lange et al. Nature Genetics 2022](https://doi.org/10.1038/s41588-022-01177-x).
+**Important caveat:** CircularODE is trained entirely on synthetic trajectories generated from the same binomial segregation physics that the model's constraints enforce. The high correlation (0.993) on held-out synthetic data therefore reflects that the model has learned to reproduce the simulation, not that it has been validated on real experimental data.
+
+The comparison below uses published endpoint CN measurements from [Lange et al. Nature Genetics 2022](https://doi.org/10.1038/s41588-022-01177-x) as a sanity check that the model's outputs are in a biologically reasonable range:
 
 | Experiment | Published CN (Day 14) | Predicted CN | Within 2σ | Correlation |
 |------------|----------------------|--------------|-----------|-------------|
@@ -653,7 +667,23 @@ This motivates the need for ecDNA-specific drug design (as Boundless Bio is doin
 | Vulnerability Discovery | Robust hits | 10-20 | **14** | ✓ Literature validated |
 | Vulnerability Discovery | Clinical targets | 1+ | **3** | ✓ BBI-355, BBI-940, BBI-825 |
 | Trajectory Prediction | MSE | <0.1 | **0.014** | ✓ Exceeds target |
-| Trajectory Prediction | Correlation | >0.9 | **0.993** | ✓ Exceeds target |
+| Trajectory Prediction | Correlation | >0.9 | **0.993** | ✓ Exceeds target (synthetic data) |
+
+**Caveats on target performance:**
+- Trajectory MSE/correlation are on synthetic held-out data, not real longitudinal measurements
+- The 14 "validated" vulnerability genes are literature cross-references, not prospective experimental validations
+- All Module 1 metrics are from a single 85/15 random split; cross-validation would give more robust estimates
+- Only 10 ecDNA+ samples in the validation set — metrics have wide confidence intervals
+
+## Known Limitations
+
+1. **Single train/val split**: Module 1 uses a single 85/15 stratified split with only 10 ecDNA+ validation samples. Bootstrap or k-fold cross-validation is needed for robust performance estimates.
+2. **No ablation experiments**: Feature group ablations (removing Hi-C, CNV, expression individually) have not been run. The relative contribution of each feature group is not empirically established.
+3. **CircularODE trained on synthetic data**: All trajectory training data is simulated. The model has not been validated on real longitudinal ecDNA copy number measurements. The 0.993 correlation reflects fitting synthetic data generated from the same physics the model enforces.
+4. **Vulnerability validation is post-hoc**: Literature cross-referencing is susceptible to confirmation bias. Many of the 14 genes (CDK1, KIF11, etc.) are general cancer dependencies that would appear in any CRISPR screen analysis, not just ecDNA-specific ones. A null baseline (random gene set validation rate) has not been computed.
+5. **No statistical significance tests**: Comparisons between ecDNA-Former and baselines lack p-values or confidence intervals.
+6. **Modules are independent**: Despite the "unified framework" framing, the three modules are trained independently on different data and have no shared representations or joint training. The integration is a post-hoc linear combination.
+7. **Small positive class**: 9.6% positive rate (113/1,176 training) limits statistical power, especially for per-lineage analysis where some lineages have <5 ecDNA+ samples.
 
 ## Integration Demo
 
