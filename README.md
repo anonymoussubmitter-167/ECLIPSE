@@ -1252,9 +1252,9 @@ If you use ECLIPSE in your research, please cite this repository:
 @software{eclipse2026,
   title={ECLIPSE: Extrachromosomal Circular DNA Learning for Integrated
          Prediction of Synthetic-lethality and Expression},
-  author={Cheng, Bryan},
+  author={Anonymous},
   year={2026},
-  url={https://github.com/bryanc5864/eclipse}
+  url={https://github.com/anonymoussubmitter-167/ECLIPSE}
 }
 ```
 
