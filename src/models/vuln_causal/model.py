@@ -114,10 +114,11 @@ class VulnCausal(nn.Module):
             )
 
         # === Do-Calculus Intervention Model ===
+        # covariate_dim must match the encoder's actual latent dim (num_factors * factor_dim)
         self.intervention_model = DoCalculusNetwork(
             treatment_dim=64,
             outcome_dim=1,
-            covariate_dim=latent_dim,
+            covariate_dim=self.causal_encoder.latent_dim,
             hidden_dim=hidden_dim,
             num_treatments=num_genes,
         )

@@ -116,8 +116,8 @@ class DriftNetwork(nn.Module):
         capacity_term = 1 - copy_number / self.carrying_capacity
         fitness_growth = fitness_growth * F.relu(capacity_term)
 
-        # Combine learned and physics-based drift
-        drift[:, 0:1] = drift[:, 0:1] + fitness_growth
+        # Combine learned and physics-based drift (out-of-place to avoid autograd issues)
+        drift = torch.cat([drift[:, 0:1] + fitness_growth, drift[:, 1:]], dim=1)
 
         return drift
 

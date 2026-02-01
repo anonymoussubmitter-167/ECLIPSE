@@ -192,14 +192,16 @@ class CircularODE(nn.Module):
             fitness = self.fitness_landscape(copy_number)
             fitness_drift = fitness * 0.1  # Scale
 
-            # Add fitness contribution to first latent dimension
-            drift[:, 0:1] = drift[:, 0:1] + fitness_drift
+            # Add fitness contribution to first latent dimension (out-of-place)
+            first_dim = drift[:, 0:1] + fitness_drift
 
             # Treatment effects
             if treatment_emb is not None:
                 effects = self.treatment_effect(treatment_emb)
                 # Reduce growth under treatment
-                drift[:, 0:1] = drift[:, 0:1] * (1 + effects["growth_effect"])
+                first_dim = first_dim * (1 + effects["growth_effect"])
+
+            drift = torch.cat([first_dim, drift[:, 1:]], dim=1)
 
         return drift
 
@@ -223,8 +225,8 @@ class CircularODE(nn.Module):
             # Segregation noise (scales with sqrt(CN))
             seg_noise = self.diffusion_net.get_segregation_noise(copy_number)
 
-            # First dimension gets segregation-scaled noise
-            base_diff[:, 0:1] = base_diff[:, 0:1] * seg_noise
+            # First dimension gets segregation-scaled noise (out-of-place)
+            base_diff = torch.cat([base_diff[:, 0:1] * seg_noise, base_diff[:, 1:]], dim=1)
 
         return base_diff
 
